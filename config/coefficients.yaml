@@ -1,0 +1,41 @@
+# Published elasticities and loan parameters for Laubach-framework tracker
+# All coefficients from the literature — NOT re-estimated here.
+
+# bp change in long-term rate per 1 pp change in projected debt/GDP
+elasticity:
+  preferred: 3.0       # Plante, Richter & Zubairy (2025, Dallas Fed WP 2513)
+  low: 2.0             # Neveu & Schafer (2024, CBO WP 2024-05)
+  high: 4.0            # Upper bound from literature
+
+# ~75% of the fiscal effect flows through the term premium (Plante et al.)
+term_premium_share: 0.75
+
+# Pass-through from 10yr Treasury to consumer rates
+# Mortgage: ~1:1 with 10yr Treasury
+# Auto: dampened by shorter duration (~2-3 bp per pp debt/GDP)
+# Small business: Fed funds channel, only ~25% of fiscal effect
+passthrough:
+  mortgage_30yr: 1.0
+  auto_5yr: 0.75
+  small_business_5yr: 0.25
+
+# Loan parameters (2024 averages)
+loans:
+  mortgage:
+    label: "30-year fixed mortgage"
+    principal: 330000     # Median home $412,500 less 20% down
+    term_months: 360
+    baseline_rate_pct: 6.72
+    source: "NAR, Freddie Mac PMMS"
+  auto:
+    label: "New auto loan"
+    principal: 41086
+    term_months: 67
+    baseline_rate_pct: 7.10
+    source: "Lending Tree"
+  small_business:
+    label: "Small business loan"
+    principal: 663000
+    term_months: 60
+    baseline_rate_pct: 7.50
+    source: "B2BReview, SBA"

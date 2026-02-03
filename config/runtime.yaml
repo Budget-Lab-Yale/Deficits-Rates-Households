@@ -1,0 +1,28 @@
+# Runtime configuration for Deficits-Rates-Households pipeline
+
+# FRED API key
+fred_api_key: "13eeee2f309460c13a0f1f8514b26106"
+
+# Projection horizon (years ahead in CBO projections)
+projection_horizon: 5
+
+# CBO GitHub data URLs
+cbo_github_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/baselines.csv"
+cbo_gdp_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/actual_GDP.csv"
+
+# Local CBO Excel files (relative to repo root)
+cbo_budget_dir: "../Data/CBO Reports/Budget Projections"
+cbo_econ_dir: "../Data/CBO Reports/Economic Projections"
+
+# Data storage root (relative to repo root)
+data_root: "../Data"
+
+# Interface name for Budget Lab data convention
+interface: "Deficits-Rates-Households"
+version: "v1"
+
+# Output settings
+output_dir: "output"
+chart_width: 10
+chart_height: 6
+chart_dpi: 300
