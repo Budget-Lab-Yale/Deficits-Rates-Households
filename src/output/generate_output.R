@@ -2,6 +2,7 @@
 
 library(ggplot2)
 library(dplyr)
+library(patchwork)
 
 generate_all_output <- function(panel, fiscal, costs, costs_table,
                                  historical, config, output_dir) {
@@ -153,27 +154,77 @@ plot_household_impacts <- function(costs_table, config, output_dir) {
 
 
 plot_historical_contributions <- function(historical, config, output_dir) {
-  p <- ggplot(historical, aes(x = vintage_date, y = cumulative_bp)) +
-    geom_line(color = "#2166AC", linewidth = 0.8) +
-    geom_point(color = "#2166AC", size = 1.5) +
+  # Shared x-axis limits
+  x_range <- range(historical$vintage_date, na.rm = TRUE)
+  x_limits <- c(x_range[1] - 60, x_range[2] + 60)
+
+  # Build three tiers of monthly grid lines
+  year_range <- as.integer(format(x_limits, "%Y"))
+  all_months <- seq(as.Date(sprintf("%d-01-01", year_range[1])),
+                    as.Date(sprintf("%d-12-01", year_range[2])), by = "1 month")
+  month_num <- as.integer(format(all_months, "%m"))
+  jan_dates     <- all_months[month_num == 1]
+  quarter_dates <- all_months[month_num %in% c(4, 7, 10)]
+  other_dates   <- all_months[!month_num %in% c(1, 4, 7, 10)]
+
+  # Shared x scale (no minor breaks — we draw them manually)
+  shared_x <- scale_x_date(limits = x_limits,
+                            breaks = jan_dates, date_labels = "%Y")
+
+  # Grid line layers (drawn behind data)
+  grid_layers <- list(
+    geom_vline(xintercept = as.numeric(other_dates),
+               color = "grey90", linewidth = 0.2),
+    geom_vline(xintercept = as.numeric(quarter_dates),
+               color = "grey75", linewidth = 0.3),
+    geom_vline(xintercept = as.numeric(jan_dates),
+               color = "grey60", linewidth = 0.4)
+  )
+
+  # Top panel: vintage-to-vintage changes (bar chart)
+  p_bars <- ggplot(historical, aes(x = vintage_date, y = rate_effect_bp)) +
+    grid_layers +
+    geom_col(fill = "#E08214", width = 25) +
     geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
-    geom_bar(aes(y = rate_effect_bp), stat = "identity",
-             fill = "#E08214", alpha = 0.6, width = 100) +
+    shared_x +
     labs(
-      title = "Cumulative Fiscal Contribution to Long-Term Rates",
-      subtitle = "Bars: vintage-to-vintage effect; Line: cumulative (3 bp per pp debt/GDP)",
-      x = "CBO projection vintage",
-      y = "Basis points"
+      title = "Fiscal Contribution to Long-Term Rates (3 bp per pp debt/GDP)",
+      subtitle = "Vintage-to-vintage change in projected debt/GDP \u00d7 elasticity",
+      x = NULL,
+      y = "bp (per vintage)"
     ) +
     theme_minimal(base_size = 12) +
     theme(
       plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank()
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank()
     )
 
-  ggsave(file.path(output_dir, "historical_contributions.png"), plot = p,
+  # Bottom panel: cumulative contribution (line chart)
+  p_cum <- ggplot(historical, aes(x = vintage_date, y = cumulative_bp)) +
+    grid_layers +
+    geom_line(color = "#2166AC", linewidth = 0.8) +
+    geom_point(color = "#2166AC", size = 1.5) +
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+    shared_x +
+    labs(
+      subtitle = "Cumulative fiscal contribution since January 2019",
+      x = "CBO projection vintage",
+      y = "Cumulative bp"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank()
+    )
+
+  # Stack with patchwork
+  p_combined <- p_bars / p_cum + plot_layout(heights = c(1, 1))
+
+  ggsave(file.path(output_dir, "historical_contributions.png"),
+         plot = p_combined,
          width = config$chart_width %||% 10,
-         height = config$chart_height %||% 6,
+         height = (config$chart_height %||% 6) * 1.4,
          dpi = config$chart_dpi %||% 300, bg = "white")
   message("  Saved historical_contributions.png")
 }

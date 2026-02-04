@@ -97,18 +97,25 @@ compute_fiscal_contribution <- function(panel, coefs) {
 
 
 # Compute the full historical time series of fiscal contributions
-compute_historical_contributions <- function(panel, coefs) {
+compute_historical_contributions <- function(panel, coefs,
+                                              start_date = as.Date("2019-01-01")) {
   # For each vintage pair in the panel, compute the rate effect.
-  # Returns data.frame with vintage dates and cumulative fiscal contribution.
+  # Filters to vintages on or after start_date, then cumulates.
 
   valid <- panel[!is.na(panel$delta_debt_gdp), ]
   if (nrow(valid) == 0) return(NULL)
 
   elasticity <- coefs$elasticity$preferred
 
+  # Filter to start_date onward
+  valid <- valid[valid$vintage_date >= start_date, ]
+  if (nrow(valid) == 0) return(NULL)
+
   contributions <- valid %>%
     mutate(
       rate_effect_bp = delta_debt_gdp * elasticity,
+      # Zero out the first row — its delta is inherited from before the window
+      rate_effect_bp = ifelse(row_number() == 1, 0, rate_effect_bp),
       cumulative_bp  = cumsum(rate_effect_bp)
     ) %>%
     select(vintage_date, horizon_year, debt_gdp_pct, delta_debt_gdp,
