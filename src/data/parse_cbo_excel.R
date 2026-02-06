@@ -23,18 +23,23 @@ library(dplyr)
 # ===========================================================================
 
 parse_cbo_excel_files <- function(config) {
-  # Parse both Budget and Economic Projections. Returns a list with:
+  # Parse Budget, Economic, and Legislative Decomposition data. Returns a list with:
   #   $budget_vintages: debt/GDP by (vintage_date, year)
   #   $econ_vintages:   nominal GDP by (vintage_date, year)
+  #   $decomp_vintages: legislative deficit decomposition by vintage
   #   $dependencies:    provenance records
 
   budget_result <- parse_budget_projections_dir(config)
   econ_result   <- parse_econ_projections_dir(config)
+  decomp_result <- parse_legislative_decomposition(config)
 
   list(
     budget_vintages = budget_result$vintages,
     econ_vintages   = econ_result$vintages,
-    dependencies    = rbind(budget_result$dependencies, econ_result$dependencies)
+    decomp_vintages = decomp_result$vintages,
+    dependencies    = rbind(budget_result$dependencies,
+                            econ_result$dependencies,
+                            decomp_result$dependencies)
   )
 }
 
@@ -50,6 +55,11 @@ save_cbo_excel <- function(cbo_excel, output_dir) {
   if (!is.null(cbo_excel$econ_vintages) && nrow(cbo_excel$econ_vintages) > 0) {
     write.csv(cbo_excel$econ_vintages,
               file.path(output_dir, "cbo_excel_gdp.csv"), row.names = FALSE)
+  }
+
+  if (!is.null(cbo_excel$decomp_vintages) && nrow(cbo_excel$decomp_vintages) > 0) {
+    write.csv(cbo_excel$decomp_vintages,
+              file.path(output_dir, "cbo_legislative_decomp.csv"), row.names = FALSE)
   }
 
   append_dependencies(output_dir, cbo_excel$dependencies)
@@ -69,11 +79,11 @@ parse_budget_projections_dir <- function(config) {
     return(empty_result())
   }
 
-  xlsx_files <- list.files(budget_dir, pattern = "51118.*\\.xlsx$",
+  xlsx_files <- list.files(budget_dir, pattern = "51118.*\\.xls(x?)$",
                            full.names = TRUE, ignore.case = TRUE)
 
   if (length(xlsx_files) == 0) {
-    message("  No Budget Projections files found (pattern: 51118*.xlsx)")
+    message("  No Budget Projections files found (pattern: 51118*.xls[x])")
     return(empty_result())
   }
 
@@ -261,7 +271,20 @@ find_year_row <- function(raw, max_scan = 15) {
     if (sum(yr_mask) >= 5) {
       cols  <- which(yr_mask)
       years <- as.integer(trimws(row_vals[cols]))
-      return(list(row = r, cols = cols, years = years))
+
+      # Remove duplicate years (5-yr/10-yr total columns that just show end year)
+      # Keep only the first occurrence of each year
+      dups <- duplicated(years)
+      if (any(dups)) {
+        cols  <- cols[!dups]
+        years <- years[!dups]
+      }
+
+      # Also remove years that break the consecutive sequence at the end
+      # (can happen when a total column year matches a non-adjacent individual year)
+      if (length(years) >= 5) {
+        return(list(row = r, cols = cols, years = years))
+      }
     }
   }
 
@@ -327,11 +350,11 @@ parse_econ_projections_dir <- function(config) {
     return(empty_result())
   }
 
-  xlsx_files <- list.files(econ_dir, pattern = "51135.*\\.xlsx$",
+  xlsx_files <- list.files(econ_dir, pattern = "51135.*\\.xls(x?)$",
                            full.names = TRUE, ignore.case = TRUE)
 
   if (length(xlsx_files) == 0) {
-    message("  No Economic Projections files found (pattern: 51135*.xlsx)")
+    message("  No Economic Projections files found (pattern: 51135*.xls[x])")
     return(empty_result())
   }
 
@@ -478,4 +501,243 @@ empty_deps <- function() {
 
 empty_result <- function() {
   list(vintages = data.frame(), dependencies = empty_deps())
+}
+
+
+# ===========================================================================
+# Legislative Decomposition (Table A-1 / equivalent)
+# ===========================================================================
+#
+# Hardcoded lookup for 2015-08 onward. Each entry specifies the exact sheet
+# name, the "since" date, and whether to negate raw values to normalize to
+# positive = increases the deficit.
+#
+# Vintages before 2015-08 are not processed (formatting too inconsistent,
+# and the continuous decomposition chain only starts at 2015-08).
+
+DECOMP_LOOKUP <- list(
+  "2015-08" = list(sheet = "8. Table A-1",  since = "2015-03-01", negate = TRUE),
+  "2016-01" = list(sheet = "18. Table A-1", since = "2015-08-01", negate = TRUE),
+  "2016-03" = list(sheet = "Table 6",       since = "2016-01-01", negate = TRUE),
+  "2016-08" = list(sheet = "Table A-1",     since = "2016-03-01", negate = TRUE),
+  "2017-01" = list(sheet = "Table A-1",     since = "2016-08-01", negate = TRUE),
+  "2017-06" = list(sheet = "Table 6",       since = "2017-01-01", negate = TRUE),
+  "2018-04" = list(sheet = "Table A-1",     since = "2017-06-01", negate = TRUE),
+  "2019-01" = list(sheet = "Table A-1",     since = "2018-04-01", negate = TRUE),
+  # 2019-05: No legislative decomposition sheet in this vintage
+  "2019-08" = list(sheet = "Table A-1",     since = "2019-05-01", negate = TRUE),
+  "2020-01" = list(sheet = "Table A-1",     since = "2019-08-01", negate = TRUE),
+  "2020-03" = list(sheet = "Table 6",       since = "2020-01-01", negate = TRUE),
+  "2020-09" = list(sheet = "Table A-1",     since = "2020-03-01", negate = TRUE),
+  "2021-02" = list(sheet = "Table 1-6",     since = "2020-09-01", negate = TRUE),
+  "2021-07" = list(sheet = "Table A-1",     since = "2021-02-01", negate = TRUE),
+  "2022-05" = list(sheet = "Table A-1",     since = "2021-07-01", negate = TRUE),
+  "2023-02" = list(sheet = "Table A-1",     since = "2022-05-01", negate = TRUE),
+  # 2023-05: Table 5 has only Technical Changes, no legislative data
+  "2024-02" = list(sheet = "Table 3-1",     since = "2023-05-01", negate = FALSE),
+  "2024-06" = list(sheet = "Table 3-1",     since = "2024-02-01", negate = FALSE),
+  "2025-01" = list(sheet = "Table A-1",     since = "2024-06-01", negate = FALSE)
+)
+
+
+parse_legislative_decomposition <- function(config) {
+  budget_dir <- resolve_path(config$cbo_budget_dir %||% config$cbo_excel_dir)
+
+  if (!dir.exists(budget_dir)) {
+    message(sprintf("  Budget Projections directory not found: %s", budget_dir))
+    return(empty_result())
+  }
+
+  all_files <- list.files(budget_dir, pattern = "51118.*\\.xls(x?)$",
+                           full.names = TRUE, ignore.case = TRUE)
+
+  message(sprintf("  Scanning %d files for legislative decomposition (2015-08 onward)...",
+                  length(all_files)))
+
+  all_vintages <- list()
+  deps <- empty_deps()
+
+  for (fpath in all_files) {
+    fname <- basename(fpath)
+    vintage_date <- extract_vintage_from_filename(fname)
+    if (is.na(vintage_date)) next
+
+    vintage_key <- format(vintage_date, "%Y-%m")
+    lookup <- DECOMP_LOOKUP[[vintage_key]]
+    if (is.null(lookup)) next  # Not in lookup = skip (pre-2015 or no decomp)
+
+    message(sprintf("  Parsing decomp: %s (sheet: '%s')", fname, lookup$sheet))
+
+    parsed <- tryCatch(
+      parse_one_decomp(fpath, lookup, vintage_date),
+      error = function(e) {
+        message(sprintf("    ERROR: %s", e$message))
+        NULL
+      }
+    )
+
+    if (!is.null(parsed)) {
+      all_vintages[[fname]] <- parsed
+      message(sprintf("    -> since %s, legislative 5yr: $%.1fB",
+                      format(parsed$since_date, "%b %Y"),
+                      parsed$legislative_deficit_5yr_bn))
+
+      deps <- rbind(deps, data.frame(
+        source = "CBO Excel Decomp",
+        series = sprintf("Legislative Decomp (%s)", format(vintage_date, "%b %Y")),
+        url = fpath,
+        retrieved_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+
+  if (length(all_vintages) == 0) {
+    message("  WARNING: No decomposition sheets parsed successfully")
+    return(list(vintages = data.frame(), dependencies = deps))
+  }
+
+  vintages <- do.call(rbind, all_vintages)
+  rownames(vintages) <- NULL
+  vintages <- vintages[order(vintages$vintage_date), ]
+
+  message(sprintf("  Decomp total: %d vintages from %s to %s",
+                  nrow(vintages),
+                  format(min(vintages$vintage_date), "%b %Y"),
+                  format(max(vintages$vintage_date), "%b %Y")))
+
+  list(vintages = vintages, dependencies = deps)
+}
+
+
+parse_one_decomp <- function(xlsx_path, lookup, vintage_date) {
+  # Parse a single decomposition sheet using hardcoded lookup config.
+  # Returns a 1-row data.frame or NULL.
+
+  raw <- suppressMessages(
+    read_excel(xlsx_path, sheet = lookup$sheet, col_names = FALSE)
+  )
+  nr <- nrow(raw)
+  nc <- ncol(raw)
+
+  # ---- 1. Find year header row ----
+  year_info <- find_year_row(raw, max_scan = min(15, nr))
+  if (is.null(year_info)) {
+    message("    Cannot find year header row")
+    return(NULL)
+  }
+
+  year_row  <- year_info$row
+  year_cols <- year_info$cols
+  years     <- year_info$years
+
+  # ---- 2. Find the 5-year cumulative total column ----
+  five_yr_col <- find_five_yr_col(raw, year_row, year_cols, years)
+  if (is.null(five_yr_col)) {
+    message("    Cannot find 5-year cumulative column")
+    return(NULL)
+  }
+
+  # ---- 3. Find the legislative deficit total row ----
+  leg_row <- find_legislative_total_row(raw, year_row, nr, nc, five_yr_col)
+  if (is.null(leg_row)) {
+    message("    Cannot find legislative deficit total row")
+    return(NULL)
+  }
+
+  # ---- 4. Extract value and normalize sign ----
+  raw_value <- suppressWarnings(
+    as.numeric(as.character(unlist(raw[leg_row, five_yr_col])))
+  )
+
+  if (is.na(raw_value)) {
+    message(sprintf("    Row %d, col %d has no numeric value", leg_row, five_yr_col))
+    return(NULL)
+  }
+
+  # Normalize: positive = increases the deficit
+  value <- if (lookup$negate) -raw_value else raw_value
+
+  data.frame(
+    vintage_date               = vintage_date,
+    since_date                 = as.Date(lookup$since),
+    legislative_deficit_5yr_bn = value,
+    sheet_name                 = lookup$sheet,
+    stringsAsFactors           = FALSE
+  )
+}
+
+
+find_five_yr_col <- function(raw, year_row, year_cols, years) {
+  # Find the column containing the 5-year cumulative total.
+  nc <- ncol(raw)
+  last_yr_col <- max(year_cols)
+
+  for (c in (last_yr_col + 1):min(nc, last_yr_col + 5)) {
+    val <- trimws(as.character(raw[year_row, c]))
+    if (is.na(val) || val == "" || val == "NA") next
+
+    # Match "YYYY-YYYY" pattern (5-year range)
+    if (grepl("^\\d{4}[^0-9]+\\d{4}$", val)) {
+      range_years <- as.integer(regmatches(val, gregexpr("\\d{4}", val))[[1]])
+      if (length(range_years) == 2) {
+        span <- range_years[2] - range_years[1] + 1
+        if (span >= 4 && span <= 6) return(c)
+      }
+    }
+
+    if (grepl("5.year|five.year|total", tolower(val))) return(c)
+  }
+
+  # Fallback: first column after year columns
+  if (last_yr_col + 1 <= nc) return(last_yr_col + 1)
+  NULL
+}
+
+
+find_legislative_total_row <- function(raw, year_row, nr, nc, five_yr_col) {
+  # Search for the row with the legislative deficit total.
+  # Looks for text patterns containing "legislat" combined with
+  # "total", "increase", "decrease", or "deficit".
+  # Returns the row number or NULL.
+
+  label_cols <- 1:min(8, nc)
+
+  # Single-row search
+  for (r in (year_row + 1):min(nr, year_row + 120)) {
+    row_text <- tolower(paste(as.character(unlist(raw[r, label_cols])), collapse = " "))
+    row_text <- gsub("\\bna\\b", "", row_text)
+    row_text <- gsub("\\s+", " ", trimws(row_text))
+
+    if (!grepl("legislat", row_text)) next
+
+    # Match summary-level legislative rows (not section headers or detail items)
+    is_summary <- grepl("total legislative|from legislative changes|deficit.*legislative changes",
+                        row_text)
+    if (!is_summary) next
+
+    # Verify it has a numeric value in the 5-year column
+    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, five_yr_col]))))
+    if (!is.na(val)) return(r)
+  }
+
+  # Two-row label search (labels can span two rows)
+  for (r in (year_row + 1):min(nr - 1, year_row + 120)) {
+    row1 <- tolower(paste(as.character(unlist(raw[r, label_cols])), collapse = " "))
+    row2 <- tolower(paste(as.character(unlist(raw[r + 1, label_cols])), collapse = " "))
+    combined <- gsub("\\bna\\b", "", paste(row1, row2))
+    combined <- gsub("\\s+", " ", trimws(combined))
+
+    if (!grepl("legislat", combined)) next
+    if (!grepl("total|increase|decrease|deficit", combined)) next
+
+    # Try second row first (usually where the number is)
+    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r + 1, five_yr_col]))))
+    if (!is.na(val)) return(r + 1)
+
+    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, five_yr_col]))))
+    if (!is.na(val)) return(r)
+  }
+
+  NULL
 }

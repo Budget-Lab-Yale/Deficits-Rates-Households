@@ -1,8 +1,8 @@
 # main.R — Entry point for Deficits-Rates-Households pipeline
 #
-# Applies published Laubach-framework elasticities to CBO projection vintages
-# to track how changes in projected federal debt contribute to Treasury yields
-# and household borrowing costs.
+# Applies published Laubach-framework elasticities to CBO legislative
+# decomposition vintages to track how enacted legislation contributes
+# to Treasury yields and household borrowing costs.
 #
 # Usage:
 #   Rscript src/main.R                     # Use default config
@@ -40,7 +40,7 @@ config_path <- if (length(args) >= 1) args[1] else NULL
 
 # ---- Load Configuration ----
 
-message("=== Deficits, Rates, and Household Costs: Laubach-Framework Tracker ===\n")
+message("=== Deficits, Rates, and Household Costs: Legislative Decomposition Tracker ===\n")
 
 config <- read_config(config_path)
 coefs  <- read_coefficients()
@@ -58,15 +58,15 @@ dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 message(sprintf("Data vintage:           %s\n", data_dir))
 
-# ---- Step 1: Fetch CBO GitHub Data ----
+# ---- Step 1: Fetch CBO GitHub Data (optional validation) ----
 
-message("--- Step 1: Fetching CBO GitHub data ---")
+message("--- Step 1: Fetching CBO GitHub data (optional validation) ---")
 
 cbo_github <- tryCatch({
   fetch_cbo_github(config)
 }, error = function(e) {
-  message(sprintf("  ERROR: %s", e$message))
-  message("  Continuing without GitHub data...")
+  message(sprintf("  NOTE: %s", e$message))
+  message("  Continuing without GitHub data (not needed for legislative decomposition)...")
   list(baselines = NULL, debt_at_horizon = data.frame(), all_debt = NULL,
        dependencies = data.frame(source = character(), series = character(),
                                  url = character(), retrieved_at = character(),
@@ -76,23 +76,24 @@ cbo_github <- tryCatch({
 save_cbo_github(cbo_github, data_dir)
 message("")
 
-# ---- Step 2: Fetch FRED Data ----
+# ---- Step 2: Fetch FRED Data (consumer rate context) ----
 
-message("--- Step 2: Fetching FRED data ---")
+message("--- Step 2: Fetching FRED data (consumer rate context) ---")
 
 fred_results <- fetch_fred_data(config)
 save_fred_data(fred_results, data_dir)
 message("")
 
-# ---- Step 3: Parse CBO Excel Files ----
+# ---- Step 3: Parse CBO Excel Files (Budget + Economic + Decomposition) ----
 
-message("--- Step 3: Parsing CBO Excel files (Budget + Economic Projections) ---")
+message("--- Step 3: Parsing CBO Excel files (Budget, Economic, & Decomposition) ---")
 
 cbo_excel <- tryCatch({
   parse_cbo_excel_files(config)
 }, error = function(e) {
   message(sprintf("  ERROR: %s", e$message))
   list(budget_vintages = data.frame(), econ_vintages = data.frame(),
+       decomp_vintages = data.frame(),
        dependencies = data.frame(
          source = character(), series = character(),
          url = character(), retrieved_at = character(),
@@ -103,27 +104,29 @@ cbo_excel <- tryCatch({
 save_cbo_excel(cbo_excel, data_dir)
 message("")
 
-# ---- Step 4: Build Dataset ----
+# ---- Step 4: Build Legislative Decomposition Panel ----
 
-message("--- Step 4: Building projection vintage panel ---")
+message("--- Step 4: Building legislative decomposition panel ---")
 
-panel <- build_dataset(cbo_github, fred_results, cbo_excel, config)
+panel <- build_dataset(cbo_excel, config)
 save_dataset(panel, data_dir)
 message("")
 
-# ---- Step 5: Compute Fiscal Contribution ----
+# ---- Step 5: Compute Fiscal Contribution (Two Scenarios) ----
 
 message("--- Step 5: Computing fiscal contribution ---")
 
-fiscal <- compute_fiscal_contribution(panel, coefs)
-historical <- compute_historical_contributions(panel, coefs)
+fiscal <- compute_fiscal_contribution(panel, coefs, config)
+historical <- compute_historical_contributions(panel, coefs, config)
 message("")
 
 # ---- Step 6: Compute Household Costs ----
 
 message("--- Step 6: Computing household cost impacts ---")
 
-costs <- compute_household_costs(fiscal, coefs)
+# Use the "since_2015" scenario as the primary for household costs
+primary_scenario <- fiscal[["since_2015"]] %||% fiscal[[1]]
+costs <- compute_household_costs(primary_scenario, coefs)
 costs_table <- household_costs_table(costs)
 message("")
 

@@ -1,4 +1,6 @@
 # generate_output.R — Tables, charts, and markdown summary
+#
+# Updated for legislative decomposition with two cumulative scenarios.
 
 library(ggplot2)
 library(dplyr)
@@ -18,20 +20,26 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
   write.csv(panel, file.path(output_dir, "projection_vintage_panel.csv"),
             row.names = FALSE)
 
-  # ---- 3. Charts ----
+  # ---- 3. Historical contributions CSV ----
+  if (!is.null(historical) && nrow(historical) > 0) {
+    write.csv(historical, file.path(output_dir, "historical_contributions.csv"),
+              row.names = FALSE)
+  }
+
+  # ---- 4. Charts ----
   tryCatch({
-    plot_debt_gdp_history(panel, config, output_dir)
-    plot_rate_effects(fiscal, config, output_dir)
-    plot_household_impacts(costs_table, config, output_dir)
+    plot_legislative_delta(panel, config, output_dir)
+    plot_cumulative_legislative(panel, config, output_dir)
     if (!is.null(historical) && nrow(historical) > 0) {
       plot_historical_contributions(historical, config, output_dir)
     }
+    plot_household_impacts(costs_table, config, output_dir)
   }, error = function(e) {
     message(sprintf("  WARNING: Chart generation failed: %s", e$message))
   })
 
-  # ---- 4. Markdown summary ----
-  generate_markdown_summary(fiscal, costs, costs_table, output_dir)
+  # ---- 5. Markdown summary ----
+  generate_markdown_summary(fiscal, costs, costs_table, panel, output_dir)
 
   message(sprintf("  All output written to %s", output_dir))
 }
@@ -39,84 +47,166 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
 
 # ---- Charts ----
 
-plot_debt_gdp_history <- function(panel, config, output_dir) {
-  p <- ggplot(panel, aes(x = vintage_date, y = debt_gdp_pct)) +
-    geom_line(color = "#2166AC", linewidth = 0.8) +
-    geom_point(aes(color = debt_gdp_source), size = 2) +
-    scale_color_manual(values = c("GitHub+ALFRED"   = "#4393C3",
-                                   "GitHub+EconExcel" = "#B35806",
-                                   "CBO Excel"        = "#E08214"),
-                       name = "Source") +
+plot_legislative_delta <- function(panel, config, output_dir) {
+  # Bar chart of per-vintage legislative delta(debt/GDP)
+  p <- ggplot(panel, aes(x = vintage_date, y = legislative_delta_debt_gdp)) +
+    geom_col(fill = "#E08214", width = 50) +
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
     labs(
-      title = sprintf("CBO Projected Debt/GDP at %d-Year Horizon",
-                      config$projection_horizon %||% 5),
-      subtitle = "By CBO projection vintage",
-      x = "Projection vintage date",
-      y = "Projected debt held by public (% of GDP)"
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank()
-    )
-
-  ggsave(file.path(output_dir, "debt_gdp_projections.png"), plot = p,
-         width = config$chart_width %||% 10,
-         height = config$chart_height %||% 6,
-         dpi = config$chart_dpi %||% 300, bg = "white")
-  message("  Saved debt_gdp_projections.png")
-}
-
-
-plot_rate_effects <- function(fiscal, config, output_dir) {
-  # Bar chart showing rate effect decomposition
-  bar_df <- data.frame(
-    component = c("Total\n(10yr Treasury)", "Term\npremium", "Expected\nshort rate",
-                  "Mortgage\n(30yr)", "Auto loan\n(5yr)", "Small business"),
-    value = c(
-      fiscal$rate_effect$preferred,
-      fiscal$tp_effect$preferred,
-      fiscal$exp_rate_effect$preferred,
-      fiscal$consumer_rates$mortgage_30yr$preferred,
-      fiscal$consumer_rates$auto_5yr$preferred,
-      fiscal$consumer_rates$small_business_5yr$preferred
-    ),
-    group = c("Treasury", "Treasury", "Treasury",
-              "Consumer", "Consumer", "Consumer"),
-    stringsAsFactors = FALSE
-  )
-  bar_df$component <- factor(bar_df$component, levels = bar_df$component)
-
-  p <- ggplot(bar_df, aes(x = component, y = value, fill = group)) +
-    geom_col(width = 0.7) +
-    geom_hline(yintercept = 0, color = "grey30") +
-    geom_text(aes(label = sprintf("%+.0f", value)),
-              vjust = ifelse(bar_df$value >= 0, -0.5, 1.5),
-              size = 3.5) +
-    scale_fill_manual(values = c("Treasury" = "#2166AC", "Consumer" = "#E08214"),
-                      name = NULL) +
-    labs(
-      title = "Fiscal Contribution to Interest Rates",
-      subtitle = sprintf("Effect of %+.1f pp change in projected debt/GDP (%s to %s)",
-                          fiscal$delta_debt_gdp,
-                          format(fiscal$vintage_from, "%b %Y"),
-                          format(fiscal$vintage_to, "%b %Y")),
-      x = NULL,
-      y = "Basis points"
+      title = "Legislative Contribution to Debt/GDP per CBO Vintage",
+      subtitle = "5-year cumulative legislative deficit \u00f7 projected GDP",
+      x = "CBO projection vintage",
+      y = "Legislative \u0394(debt/GDP) (pp)"
     ) +
     theme_minimal(base_size = 12) +
     theme(
       plot.title = element_text(face = "bold"),
       panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank(),
-      axis.text.x = element_text(size = 9)
+      panel.grid.major.x = element_blank()
     )
 
-  ggsave(file.path(output_dir, "rate_effects.png"), plot = p,
+  ggsave(file.path(output_dir, "legislative_delta.png"), plot = p,
          width = config$chart_width %||% 10,
          height = config$chart_height %||% 6,
          dpi = config$chart_dpi %||% 300, bg = "white")
-  message("  Saved rate_effects.png")
+  message("  Saved legislative_delta.png")
+}
+
+
+plot_cumulative_legislative <- function(panel, config, output_dir) {
+  # Line chart showing cumulative legislative delta(debt/GDP) for both scenarios
+
+  plot_data <- list()
+
+  if (any(!is.na(panel$cumulative_since_2015))) {
+    d2015 <- panel[!is.na(panel$cumulative_since_2015), ]
+    d2015$scenario <- "Since 2015"
+    d2015$cumulative <- d2015$cumulative_since_2015
+    plot_data[["2015"]] <- d2015[, c("vintage_date", "scenario", "cumulative")]
+  }
+
+  if (any(!is.na(panel$cumulative_since_2022))) {
+    d2022 <- panel[!is.na(panel$cumulative_since_2022), ]
+    d2022$scenario <- "Since 2022"
+    d2022$cumulative <- d2022$cumulative_since_2022
+    plot_data[["2022"]] <- d2022[, c("vintage_date", "scenario", "cumulative")]
+  }
+
+  if (length(plot_data) == 0) return(invisible(NULL))
+
+  combined <- do.call(rbind, plot_data)
+
+  p <- ggplot(combined, aes(x = vintage_date, y = cumulative, color = scenario)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2) +
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+    scale_color_manual(values = c("Since 2015" = "#2166AC",
+                                   "Since 2022" = "#E08214"),
+                       name = NULL) +
+    labs(
+      title = "Cumulative Legislative Contribution to Debt/GDP",
+      subtitle = "Chained CBO decomposition vintages",
+      x = "CBO projection vintage",
+      y = "Cumulative legislative \u0394(debt/GDP) (pp)"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position = "top"
+    )
+
+  ggsave(file.path(output_dir, "cumulative_legislative.png"), plot = p,
+         width = config$chart_width %||% 10,
+         height = config$chart_height %||% 6,
+         dpi = config$chart_dpi %||% 300, bg = "white")
+  message("  Saved cumulative_legislative.png")
+}
+
+
+plot_historical_contributions <- function(historical, config, output_dir) {
+  # Two-panel chart: per-vintage rate effect bars + cumulative rate line
+  # Faceted by scenario
+
+  scenarios <- unique(historical$scenario_label)
+
+  for (scen in scenarios) {
+    scen_data <- historical[historical$scenario_label == scen, ]
+    safe_name <- tolower(gsub("\\s+", "_", scen))
+
+    # Shared x-axis limits
+    x_range <- range(scen_data$vintage_date, na.rm = TRUE)
+    x_limits <- c(x_range[1] - 60, x_range[2] + 60)
+
+    # Build month gridlines
+    year_range <- as.integer(format(x_limits, "%Y"))
+    all_months <- seq(as.Date(sprintf("%d-01-01", year_range[1])),
+                      as.Date(sprintf("%d-12-01", year_range[2])), by = "1 month")
+    month_num <- as.integer(format(all_months, "%m"))
+    jan_dates     <- all_months[month_num == 1]
+    quarter_dates <- all_months[month_num %in% c(4, 7, 10)]
+    other_dates   <- all_months[!month_num %in% c(1, 4, 7, 10)]
+
+    shared_x <- scale_x_date(limits = x_limits,
+                              breaks = jan_dates, date_labels = "%Y")
+
+    grid_layers <- list(
+      geom_vline(xintercept = as.numeric(other_dates),
+                 color = "grey90", linewidth = 0.2),
+      geom_vline(xintercept = as.numeric(quarter_dates),
+                 color = "grey75", linewidth = 0.3),
+      geom_vline(xintercept = as.numeric(jan_dates),
+                 color = "grey60", linewidth = 0.4)
+    )
+
+    # Top panel: per-vintage rate effects
+    p_bars <- ggplot(scen_data, aes(x = vintage_date, y = rate_effect_bp)) +
+      grid_layers +
+      geom_col(fill = "#E08214", width = 25) +
+      geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+      shared_x +
+      labs(
+        title = sprintf("Legislative Fiscal Contribution to Long-Term Rates (%s)", scen),
+        subtitle = "Per-vintage legislative \u0394(debt/GDP) \u00d7 3 bp/pp elasticity",
+        x = NULL,
+        y = "bp (per vintage)"
+      ) +
+      theme_minimal(base_size = 12) +
+      theme(
+        plot.title = element_text(face = "bold"),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()
+      )
+
+    # Bottom panel: cumulative rate effect
+    p_cum <- ggplot(scen_data, aes(x = vintage_date, y = cumulative_bp)) +
+      grid_layers +
+      geom_line(color = "#2166AC", linewidth = 0.8) +
+      geom_point(color = "#2166AC", size = 1.5) +
+      geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+      shared_x +
+      labs(
+        subtitle = sprintf("Cumulative legislative rate effect %s", tolower(scen)),
+        x = "CBO projection vintage",
+        y = "Cumulative bp"
+      ) +
+      theme_minimal(base_size = 12) +
+      theme(
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()
+      )
+
+    # Stack with patchwork
+    p_combined <- p_bars / p_cum + plot_layout(heights = c(1, 1))
+
+    fname <- sprintf("historical_contributions_%s.png", safe_name)
+    ggsave(file.path(output_dir, fname),
+           plot = p_combined,
+           width = config$chart_width %||% 10,
+           height = (config$chart_height %||% 6) * 1.4,
+           dpi = config$chart_dpi %||% 300, bg = "white")
+    message(sprintf("  Saved %s", fname))
+  }
 }
 
 
@@ -132,9 +222,8 @@ plot_household_impacts <- function(costs_table, config, output_dir) {
               size = 4) +
     geom_hline(yintercept = 0, color = "grey30") +
     labs(
-      title = "Annual Household Cost Impact of Fiscal Policy",
-      subtitle = sprintf("From %+.1f pp change in projected debt/GDP (preferred elasticity: 3 bp/pp)",
-                          pref$rate_change_bps[1] / (3 * pref$passthrough[1])),
+      title = "Annual Household Cost Impact of Legislative Fiscal Policy",
+      subtitle = "Cumulative legislative contribution (preferred elasticity: 3 bp/pp)",
       x = NULL,
       y = "Change in annual payment ($)"
     ) +
@@ -153,123 +242,56 @@ plot_household_impacts <- function(costs_table, config, output_dir) {
 }
 
 
-plot_historical_contributions <- function(historical, config, output_dir) {
-  # Shared x-axis limits
-  x_range <- range(historical$vintage_date, na.rm = TRUE)
-  x_limits <- c(x_range[1] - 60, x_range[2] + 60)
-
-  # Build three tiers of monthly grid lines
-  year_range <- as.integer(format(x_limits, "%Y"))
-  all_months <- seq(as.Date(sprintf("%d-01-01", year_range[1])),
-                    as.Date(sprintf("%d-12-01", year_range[2])), by = "1 month")
-  month_num <- as.integer(format(all_months, "%m"))
-  jan_dates     <- all_months[month_num == 1]
-  quarter_dates <- all_months[month_num %in% c(4, 7, 10)]
-  other_dates   <- all_months[!month_num %in% c(1, 4, 7, 10)]
-
-  # Shared x scale (no minor breaks — we draw them manually)
-  shared_x <- scale_x_date(limits = x_limits,
-                            breaks = jan_dates, date_labels = "%Y")
-
-  # Grid line layers (drawn behind data)
-  grid_layers <- list(
-    geom_vline(xintercept = as.numeric(other_dates),
-               color = "grey90", linewidth = 0.2),
-    geom_vline(xintercept = as.numeric(quarter_dates),
-               color = "grey75", linewidth = 0.3),
-    geom_vline(xintercept = as.numeric(jan_dates),
-               color = "grey60", linewidth = 0.4)
-  )
-
-  # Top panel: vintage-to-vintage changes (bar chart)
-  p_bars <- ggplot(historical, aes(x = vintage_date, y = rate_effect_bp)) +
-    grid_layers +
-    geom_col(fill = "#E08214", width = 25) +
-    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
-    shared_x +
-    labs(
-      title = "Fiscal Contribution to Long-Term Rates (3 bp per pp debt/GDP)",
-      subtitle = "Vintage-to-vintage change in projected debt/GDP \u00d7 elasticity",
-      x = NULL,
-      y = "bp (per vintage)"
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank()
-    )
-
-  # Bottom panel: cumulative contribution (line chart)
-  p_cum <- ggplot(historical, aes(x = vintage_date, y = cumulative_bp)) +
-    grid_layers +
-    geom_line(color = "#2166AC", linewidth = 0.8) +
-    geom_point(color = "#2166AC", size = 1.5) +
-    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
-    shared_x +
-    labs(
-      subtitle = "Cumulative fiscal contribution since January 2019",
-      x = "CBO projection vintage",
-      y = "Cumulative bp"
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank()
-    )
-
-  # Stack with patchwork
-  p_combined <- p_bars / p_cum + plot_layout(heights = c(1, 1))
-
-  ggsave(file.path(output_dir, "historical_contributions.png"),
-         plot = p_combined,
-         width = config$chart_width %||% 10,
-         height = (config$chart_height %||% 6) * 1.4,
-         dpi = config$chart_dpi %||% 300, bg = "white")
-  message("  Saved historical_contributions.png")
-}
-
-
 # ---- Markdown Summary ----
 
-generate_markdown_summary <- function(fiscal, costs, costs_table, output_dir) {
+generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_dir) {
 
   lines <- c(
-    sprintf("# Fiscal Contribution to Interest Rates: %s to %s",
-            format(fiscal$vintage_from, "%B %Y"),
-            format(fiscal$vintage_to, "%B %Y")),
+    "# Legislative Fiscal Contribution to Interest Rates",
     "",
     sprintf("*Generated: %s*", format(Sys.time(), "%Y-%m-%d %H:%M")),
-    "",
-    "## Summary",
-    "",
-    sprintf("- **Change in CBO %d-year projected debt/GDP:** %+.1f pp (%.1f%% to %.1f%%)",
-            fiscal$horizon_year - as.integer(format(fiscal$vintage_to, "%Y")),
-            fiscal$delta_debt_gdp,
-            fiscal$debt_gdp_from, fiscal$debt_gdp_to),
-    sprintf("- **Estimated contribution to long-term Treasury rates:** %+.0f bp (range: %+.0f to %+.0f)",
-            fiscal$rate_effect$preferred,
-            fiscal$rate_effect$low, fiscal$rate_effect$high),
-    sprintf("- **Term premium component (~75%%):** %+.0f bp",
-            fiscal$tp_effect$preferred),
-    sprintf("- **Expected short rate component (~25%%):** %+.0f bp",
-            fiscal$exp_rate_effect$preferred),
-    "",
-    "## Pass-Through to Consumer Rates",
-    "",
-    "| Consumer Rate | Rate Effect | Pass-Through |",
-    "|--------------|-------------|-------------|"
+    ""
   )
 
-  for (loan_name in names(fiscal$consumer_rates)) {
-    cr <- fiscal$consumer_rates[[loan_name]]
-    pt <- fiscal$passthrough[[loan_name]]
-    lines <- c(lines, sprintf("| %s | %+.0f bp | %.0f%% |",
-                              loan_name, cr$preferred, pt * 100))
+  # Summary for each scenario
+  for (scenario_name in names(fiscal)) {
+    f <- fiscal[[scenario_name]]
+
+    lines <- c(lines,
+      sprintf("## %s", f$scenario_label),
+      "",
+      sprintf("- **Scenario:** Cumulative legislative impact %s (%d vintages)",
+              tolower(f$scenario_label), f$n_vintages),
+      sprintf("- **Cumulative legislative \\u0394(debt/GDP):** %+.2f pp",
+              f$cumulative_delta),
+      sprintf("- **Estimated contribution to long-term Treasury rates:** %+.0f bp (range: %+.0f to %+.0f)",
+              f$rate_effect$preferred, f$rate_effect$low, f$rate_effect$high),
+      sprintf("- **Term premium component (~75%%):** %+.0f bp",
+              f$tp_effect$preferred),
+      sprintf("- **Expected short rate component (~25%%):** %+.0f bp",
+              f$exp_rate_effect$preferred),
+      ""
+    )
+
+    lines <- c(lines,
+      "### Pass-Through to Consumer Rates",
+      "",
+      "| Consumer Rate | Rate Effect | Pass-Through |",
+      "|--------------|-------------|-------------|"
+    )
+
+    for (loan_name in names(f$consumer_rates)) {
+      cr <- f$consumer_rates[[loan_name]]
+      pt <- f$passthrough[[loan_name]]
+      lines <- c(lines, sprintf("| %s | %+.0f bp | %.0f%% |",
+                                loan_name, cr$preferred, pt * 100))
+    }
+
+    lines <- c(lines, "")
   }
 
+  # Household costs (primary scenario)
   lines <- c(lines,
-    "",
     "## Household Cost Impacts (Preferred Elasticity: 3 bp/pp)",
     "",
     "| Loan Type | Principal | Rate Change | Annual Impact | Lifetime Impact |",
@@ -287,6 +309,9 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, output_dir) {
                               format_dollars(r$lifetime_impact)))
   }
 
+  # Sensitivity table
+  primary <- fiscal[["since_2015"]] %||% fiscal[[1]]
+
   lines <- c(lines,
     "",
     "## Sensitivity",
@@ -296,8 +321,8 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, output_dir) {
   )
 
   for (scenario in c("low", "preferred", "high")) {
-    el <- fiscal$elasticity[[scenario]]
-    re <- fiscal$rate_effect[[scenario]]
+    el <- primary$elasticity[[scenario]]
+    re <- primary$rate_effect[[scenario]]
     mortgage <- costs_table[costs_table$scenario == scenario &
                             costs_table$loan_type == costs[[1]]$label, ]
     ma <- if (nrow(mortgage) > 0) mortgage$annual_impact[1] else NA
@@ -311,6 +336,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, output_dir) {
                               if (!is.na(ma)) format_dollars(ma) else "N/A"))
   }
 
+  # Methodology
   lines <- c(lines,
     "",
     "## Methodology",
@@ -319,12 +345,22 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, output_dir) {
     "updated by Plante, Richter & Zubairy (2025, Dallas Fed WP 2513). It is NOT a",
     "regression re-estimation. The approach:",
     "",
-    "1. Extracts CBO's projected debt/GDP at the 5-year horizon from each projection vintage",
-    "2. Computes the change between consecutive vintages",
-    "3. Multiplies by the published elasticity (3 bp per pp, range 2-4)",
-    "4. Decomposes into term premium (~75%) and expected short rate (~25%) channels",
-    "5. Applies pass-through rates to consumer loan rates",
-    "6. Translates into dollar cost impacts via standard amortization",
+    "1. From each CBO projection vintage, extracts the **legislative component** of",
+    "   the deficit decomposition (Table A-1 or equivalent)",
+    "2. Divides the 5-year cumulative legislative deficit by projected GDP to get",
+    "   legislative delta(debt/GDP) in percentage points",
+    "3. Chains these across consecutive CBO vintages into cumulative series",
+    "4. Multiplies by the published elasticity (3 bp per pp, range 2-4)",
+    "5. Decomposes into term premium (~75%) and expected short rate (~25%) channels",
+    "6. Applies pass-through rates to consumer loan rates",
+    "7. Translates into dollar cost impacts via standard amortization",
+    "",
+    "### Data Sources",
+    "",
+    sprintf("- **Decomposition vintages:** %d CBO Budget Projections files parsed",
+            nrow(panel)),
+    "- **GDP denominator:** CBO Economic Projections Excel files",
+    "- **Consumer rates:** FRED (MORTGAGE30US, TERMCBAUTO48NS, DPRIME)",
     "",
     "## Sources",
     "",

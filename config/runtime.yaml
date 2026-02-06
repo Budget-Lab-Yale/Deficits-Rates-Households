@@ -21,6 +21,15 @@ data_root: "../Data"
 interface: "Deficits-Rates-Households"
 version: "v1"
 
+# Cumulative legislative impact scenarios
+scenarios:
+  since_2015:
+    start_vintage: "2015-08-01"
+    label: "Since 2015"
+  since_2022:
+    start_vintage: "2022-05-01"
+    label: "Since 2022"
+
 # Output settings
 output_dir: "output"
 chart_width: 10
