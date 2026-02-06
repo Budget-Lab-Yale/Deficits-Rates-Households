@@ -76,20 +76,43 @@ plot_legislative_delta <- function(panel, config, output_dir) {
 plot_cumulative_legislative <- function(panel, config, output_dir) {
   # Line chart showing cumulative legislative delta(debt/GDP) for both scenarios
 
+  scenarios <- config$scenarios
+  if (is.null(scenarios)) {
+    scenarios <- list(
+      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
+      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
+    )
+  }
+
   plot_data <- list()
 
   if (any(!is.na(panel$cumulative_since_2015))) {
     d2015 <- panel[!is.na(panel$cumulative_since_2015), ]
     d2015$scenario <- "Since 2015"
     d2015$cumulative <- d2015$cumulative_since_2015
-    plot_data[["2015"]] <- d2015[, c("vintage_date", "scenario", "cumulative")]
+    pts <- d2015[, c("vintage_date", "scenario", "cumulative")]
+    # Anchor at 0 on the last vintage before the scenario window
+    # (or the first vintage's since_date if no prior vintage in panel)
+    start <- as.Date(scenarios$since_2015$start_vintage)
+    prior <- panel$vintage_date[panel$vintage_date < start]
+    anchor_date <- if (length(prior) > 0) max(prior) else as.Date(d2015$since_date[1])
+    anchor <- data.frame(vintage_date = anchor_date, scenario = "Since 2015", cumulative = 0)
+    pts <- rbind(anchor, pts)
+    plot_data[["2015"]] <- pts
   }
 
   if (any(!is.na(panel$cumulative_since_2022))) {
     d2022 <- panel[!is.na(panel$cumulative_since_2022), ]
     d2022$scenario <- "Since 2022"
     d2022$cumulative <- d2022$cumulative_since_2022
-    plot_data[["2022"]] <- d2022[, c("vintage_date", "scenario", "cumulative")]
+    pts <- d2022[, c("vintage_date", "scenario", "cumulative")]
+    start <- as.Date(scenarios$since_2022$start_vintage)
+    prior <- panel$vintage_date[panel$vintage_date < start]
+    if (length(prior) > 0) {
+      anchor <- data.frame(vintage_date = max(prior), scenario = "Since 2022", cumulative = 0)
+      pts <- rbind(anchor, pts)
+    }
+    plot_data[["2022"]] <- pts
   }
 
   if (length(plot_data) == 0) return(invisible(NULL))
