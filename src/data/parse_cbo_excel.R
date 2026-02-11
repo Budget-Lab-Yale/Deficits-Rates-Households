@@ -537,7 +537,11 @@ DECOMP_LOOKUP <- list(
   "2024-02" = list(sheet = "Table 3-1",     since = "2023-05-01", negate = FALSE),
   "2024-06" = list(sheet = "Table 3-1",     since = "2024-02-01", negate = FALSE),
   "2025-01" = list(sheet = "Table A-1",     since = "2024-06-01", negate = FALSE),
-  "2026-02" = list(sheet = "Table 5-1",     since = "2025-01-01", negate = FALSE)
+  "2026-02" = list(sheet = "Table 5-1",     since = "2025-01-01", negate = FALSE,
+                   # Executive-action tariffs: CBO classified customs revenue from
+                   # 2025 tariffs as "technical changes" since they weren't legislation.
+                   # We include them as policy-driven fiscal actions.
+                   include_technical_customs = TRUE)
 )
 
 
@@ -659,6 +663,17 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date) {
   # Normalize: positive = increases the deficit
   value <- if (lookup$negate) -raw_value else raw_value
 
+  # ---- 5. Adjust for executive-action tariffs if flagged ----
+  # Customs revenue from technical changes reduces the deficit, so subtract it.
+  if (isTRUE(lookup$include_technical_customs)) {
+    customs_val <- find_technical_customs_revenue(raw, year_row, leg_row, nr, nc, five_yr_col)
+    if (!is.null(customs_val)) {
+      message(sprintf("    Tariff customs revenue (technical): $%.1fB -> deficit adjustment: -$%.1fB",
+                      customs_val, customs_val))
+      value <- value - customs_val
+    }
+  }
+
   data.frame(
     vintage_date               = vintage_date,
     since_date                 = as.Date(lookup$since),
@@ -742,3 +757,37 @@ find_legislative_total_row <- function(raw, year_row, nr, nc, five_yr_col) {
 
   NULL
 }
+
+
+find_technical_customs_revenue <- function(raw, year_row, leg_row, nr, nc, five_yr_col) {
+  # Find "Customs duties" in the technical changes revenue section
+  # (after the legislative and economic totals). Returns the 5-year
+  # revenue value in $B, or NULL if not found.
+
+  label_cols <- 1:min(8, nc)
+
+  # First, find the technical changes section by locating
+  # "economic changes" summary row — technical section follows.
+  tech_start <- NULL
+  for (r in (leg_row + 1):min(nr, leg_row + 80)) {
+    row_text <- tolower(paste(as.character(unlist(raw[r, label_cols])), collapse = " "))
+    row_text <- gsub("\\bna\\b", "", row_text)
+    if (grepl("deficit.*economic changes|economic changes.*deficit", row_text)) {
+      tech_start <- r + 1
+      break
+    }
+  }
+  if (is.null(tech_start)) return(NULL)
+
+  # Now find "Customs duties" in the technical section
+  for (r in tech_start:min(nr, tech_start + 40)) {
+    row_text <- tolower(trimws(as.character(unlist(raw[r, 1]))))
+    if (grepl("^customs dut", row_text)) {
+      val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, five_yr_col]))))
+      if (!is.na(val)) return(val)
+    }
+  }
+
+  NULL
+}
+
