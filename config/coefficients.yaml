@@ -11,12 +11,14 @@ elasticity:
 term_premium_share: 0.75
 
 # Pass-through from 10yr Treasury to consumer rates
-# Mortgage: ~1:1 with 10yr Treasury
-# Auto: dampened by shorter duration (~2-3 bp per pp debt/GDP)
-# Small business: Fed funds channel, only ~25% of fiscal effect
+# Mortgage: ~1:1 with 10yr Treasury (regression beta 1.022, R² 0.89)
+# Auto: benchmarked to 5yr Treasury; dampened by shorter duration and
+#   nonbank lending share (~55%). Range 0.50-0.75; see passthrough_literature_review.md
+# Small business: prime-linked (fed funds + 3%); only the ~25% expected-short-rate
+#   channel of the fiscal effect reaches prime. See passthrough_literature_review.md
 passthrough:
   mortgage_30yr: 1.0
-  auto_5yr: 0.75
+  auto_5yr: 0.50
   small_business_5yr: 0.25
 
 # Loan parameters (2024 averages)
