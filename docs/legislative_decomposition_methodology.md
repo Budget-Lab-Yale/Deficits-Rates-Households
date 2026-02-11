@@ -1,12 +1,12 @@
-# Legislative Fiscal Contribution to Interest Rates: Methodology
+# Fiscal-Policy Contribution to Interest Rates: Methodology
 
-This document describes how the pipeline isolates the legislative component of
-federal deficit changes and translates it into estimated effects on Treasury yields
+This document describes how the pipeline isolates fiscal-policy-driven components of
+federal deficit changes and translates them into estimated effects on Treasury yields
 and household borrowing costs.
 
 ## Approach
 
-We extract the **legislative component** of CBO's deficit decomposition from each
+We extract the **fiscal-policy component** of CBO's deficit decomposition from each
 Budget and Economic Outlook vintage. CBO decomposes changes in its baseline deficit
 projections into three categories:
 
@@ -14,13 +14,13 @@ projections into three categories:
 - **Economic changes** -- revised macroeconomic assumptions
 - **Technical changes** -- re-estimates, data revisions, modeling updates
 
-By isolating only the legislative component, we measure how much of the change in
-projected deficits is attributable to deliberate policy choices (tax cuts, spending
-bills, etc.) rather than economic conditions or technical revisions.
+The baseline metric uses CBO's legislative component. For the 2026-02 vintage,
+the parser also includes a one-time policy-intent adjustment for customs-duty effects
+that CBO classified as technical.
 
 We then apply the published Laubach-framework elasticity (3 basis points per
 percentage point of projected debt/GDP, from Plante, Richter & Zubairy 2025,
-Dallas Fed WP 2513) to translate cumulative legislative deficit changes into
+Dallas Fed WP 2513) to translate cumulative fiscal-policy deficit changes into
 estimated effects on long-term Treasury rates.
 
 ## Data Sources
@@ -32,8 +32,8 @@ estimated effects on long-term Treasury rates.
 ## Vintage Coverage
 
 We use 20 CBO projection vintages from August 2015 through February 2026, forming
-a continuous chain. Each vintage reports the 5-year cumulative legislative deficit
-change (in billions) since the immediately preceding CBO baseline.
+a continuous chain. Each vintage reports decomposition values since the immediately
+preceding CBO baseline.
 
 Two mid-cycle updates (May 2019, May 2023) did not include a legislative
 decomposition and are skipped; the subsequent full vintage bridges the gap.
@@ -69,45 +69,35 @@ revenue increases).
 
 ## Pipeline Steps
 
-1. **Parse decomposition:** From each CBO Budget Projections file, extract the
-   5-year cumulative legislative deficit change ($B) from the relevant table.
+1. **Parse decomposition:** From each CBO Budget Projections file, extract annual
+   fiscal-policy deficit changes from the relevant decomposition table.
 
-2. **GDP denominator:** Match each vintage to the nearest CBO Economic Projections
-   file and extract projected nominal GDP at the 5-year horizon.
+2. **Harmonize horizon:** Sum annual fiscal-policy changes for exact years `t+1`
+   through `t+5` for each vintage.
 
-3. **Legislative delta(debt/GDP):** Divide the legislative deficit by projected GDP
-   to get the legislative contribution in percentage points of GDP.
+3. **GDP denominator:** Match each vintage to the latest CBO Economic Projections
+   file on or before that vintage and extract projected nominal GDP at the 5-year horizon.
 
-4. **Cumulative sum:** Chain the per-vintage deltas into a running total (two
+4. **Fiscal-policy delta(debt/GDP):** Divide the harmonized 5-year fiscal-policy
+   deficit by projected GDP to get the contribution in percentage points of GDP.
+
+5. **Cumulative sum:** Chain the per-vintage deltas into a running total (two
    scenarios: since Aug 2015 and since May 2022).
 
-5. **Rate effect:** Multiply cumulative delta(debt/GDP) by the Laubach-framework
+6. **Rate effect:** Multiply cumulative delta(debt/GDP) by the Laubach-framework
    elasticity (3 bp per pp; range 2-4 bp/pp).
 
-6. **Decompose:** Split into term premium (~75%) and expected short rate (~25%).
+7. **Decompose:** Split into term premium (~75%) and expected short rate (~25%).
 
-7. **Consumer pass-through:** Apply pass-through rates to consumer loan benchmarks
+8. **Consumer pass-through:** Apply pass-through rates to consumer loan benchmarks
    (mortgage 100%, auto 75%, small business 25%).
 
-8. **Household costs:** Translate rate changes into dollar impacts via standard
+9. **Household costs:** Translate rate changes into dollar impacts via standard
    amortization.
 
-## Current Results (February 2026 Vintage)
+## Current Results
 
-### Rate Effects
-
-| Scenario | Cumulative delta(debt/GDP) | 10yr Rate Effect | Range |
-|----------|---------------------------:|:----------------:|:-----:|
-| Since 2015 | +31.70 pp | **+95 bp** | +63 to +127 bp |
-| Since 2022 | +9.71 pp | **+29 bp** | +19 to +39 bp |
-
-### Household Cost Impacts (Since 2015 Scenario)
-
-| Loan Type | Rate Change | Annual Impact | Lifetime Impact |
-|-----------|:-----------:|--------------:|----------------:|
-| 30-year fixed mortgage ($400K) | +95 bp | +$2,548/yr | +$76,443 |
-| 48-month auto loan ($35K) | +71 bp | +$169/yr | +$942 |
-| 5-year small business ($750K) | +24 bp | +$900/yr | +$4,501 |
+See `output/summary.md` for the latest run-level results.
 
 ## Analytical Considerations
 
@@ -133,17 +123,14 @@ This could modestly overstate the contribution of new legislation.
 
 ### Variable Window Lengths
 
-Most 5-year totals cover exactly 5 fiscal years (e.g., FY2025-2029), but some
-vintages -- particularly in the 2020-2021 era -- use a 6-year window (e.g.,
-FY2020-2025). The column header in the Excel file indicates the actual range.
-This introduces a slight inconsistency when comparing magnitudes across vintages.
+Reported CBO summary-window columns vary by vintage (some are 6-year ranges).
+The current parser harmonizes each vintage to a strict `t+1..t+5` sum from annual
+columns to remove this inconsistency.
 
 ### GDP Denominator Timing
 
-Each decomposition vintage is matched to the nearest CBO Economic Projections
-file for the GDP denominator. Most matches are exact or within 2-3 months.
-GDP projections at the 5-year horizon are relatively stable across a few months,
-so small timing gaps are unlikely to be material.
+Each decomposition vintage is matched to the latest CBO Economic Projections file
+on or before that vintage (no look-ahead matching), subject to a maximum lag threshold.
 
 ### Mid-Cycle Gaps
 

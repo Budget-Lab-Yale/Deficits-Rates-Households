@@ -1,12 +1,15 @@
 # Deficits, Rates, and Household Costs
 
 Applies published Laubach-framework elasticities to CBO projection vintages to track how
-changes in projected federal debt contribute to Treasury yields and household borrowing costs.
+fiscal policy contributes to projected federal debt, Treasury yields, and household borrowing costs.
 
 This is **not** a regression re-estimation. It applies the 3 bp/pp coefficient from
 Plante, Richter & Zubairy (2025, Dallas Fed WP 2513) to changes in CBO's projected
 debt/GDP, then translates rate effects into mortgage, auto, and small business loan
 cost impacts.
+
+The core panel harmonizes each vintage to an exact 5-year window (`t+1` to `t+5`)
+before converting to debt/GDP.
 
 ## Usage
 
@@ -35,9 +38,12 @@ output/           Generated results (gitignored)
 ## Data Sources
 
 - **CBO GitHub** (`baselines.csv`): 41 projection vintages (1984-2025), debt in billions
-- **FRED** (`NGDPPOT`): Nominal potential GDP for debt/GDP denominator
+- **CBO Economic Projections Excel**: projected nominal GDP denominator
 - **CBO Excel** (Budget Projections): Authoritative debt/GDP ratios for recent vintages
 - **FRED** (consumer rates): MORTGAGE30US, TERMCBAUTO48NS, DPRIME for context
+
+By default, network fetches are disabled in `config/runtime.yaml`; set `fetch.*=true`
+to refresh external sources. Enabled fetches are fail-fast.
 
 ## Key Coefficient
 

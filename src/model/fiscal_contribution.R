@@ -96,7 +96,7 @@ compute_fiscal_contribution <- function(panel, coefs, config) {
 
     # Print summary
     message(sprintf("\n  %s (cumulative over %d vintages):", label, nrow(valid)))
-    message(sprintf("  Cumulative legislative Δ(debt/GDP): %+.2f pp", cumulative_delta))
+    message(sprintf("  Cumulative fiscal-policy Δ(debt/GDP): %+.2f pp", cumulative_delta))
     message(sprintf("  Rate effect (preferred): %+.0f bp (range: %+.0f to %+.0f)",
                     rate_effect$preferred, rate_effect$low, rate_effect$high))
     message(sprintf("    Term premium: %+.0f bp", tp_effect$preferred))

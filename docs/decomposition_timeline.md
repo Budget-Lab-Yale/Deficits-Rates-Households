@@ -1,7 +1,7 @@
-# CBO Budget Projections: Legislative Decomposition Timeline
+# CBO Budget Projections: Fiscal-Policy Decomposition Timeline
 
 This reference documents the 20 CBO Budget Projections vintages used in the
-legislative decomposition pipeline, the specific parsing choices made for each,
+fiscal-policy decomposition pipeline, the specific parsing choices made for each,
 and known concerns.
 
 ## Overview
@@ -25,7 +25,7 @@ This approach was chosen because CBO changed the decomposition format at least 4
 between 2007 and 2025, with variations in sheet names, column layouts, row labels, and
 sign conventions. A universal regex-based parser proved fragile across these eras.
 
-## Parsed Vintage Table
+## Parsed Vintage Table (Reported Window Values)
 
 All values verified against raw Excel files (spot-checked Feb 2026).
 
@@ -52,7 +52,8 @@ All values verified against raw Excel files (spot-checked Feb 2026).
 | 2025-01 | `Table A-1` | Jun 2024 | +124.6 | No | **+124.6** | Continuing resolutions, minor legislation |
 | 2026-02 | `Table 5-1` | Jan 2025 | +2285.3 | No | **+2285.3** | **2025 Reconciliation Act** (TCJA extension + tax/spending changes) |
 
-**Cumulative sum (all 20 vintages):** +$8,267B in 5-year legislative deficits
+Note: The production metric now uses harmonized annual sums over exact years
+`t+1` through `t+5`, not these reported-window totals.
 
 ## Skipped Vintages (2015+ Range)
 
@@ -114,18 +115,14 @@ legislative changes" in some vintages but not all.
 
 ### 2. Variable Window Lengths
 
-Not all 5-year totals cover exactly 5 fiscal years. Some vintages (especially
-2020-2021 era) use a 6-year window (e.g., FY2020-2025 = 6 years). The column
-header indicates the range (e.g., "2020-2025" vs "2021-2025"). This introduces
-a slight inconsistency in the denominator when comparing across vintages.
+Not all reported totals cover exactly 5 fiscal years. Some vintages (especially
+2020-2021 era) use a 6-year window. The parser now harmonizes each vintage by
+summing annual values for exact years `t+1..t+5`.
 
 ### 3. GDP Denominator Matching
 
-Each decomposition vintage is matched to the nearest CBO Economic Projections
-file (within 180 days) to get projected GDP at the 5-year horizon. Most matches
-are exact or within 2-3 months. The one exception is 2015-08, which uses the
-2015-01 econ file (7-month gap). GDP projections at the 5-year horizon are
-relatively stable across a few months, so this is unlikely to be material.
+Each decomposition vintage is matched to the latest CBO Economic Projections
+file on or before that vintage (no look-ahead matching), subject to a maximum lag.
 
 ### 4. Mid-Cycle Gaps
 
@@ -133,7 +130,13 @@ Two vintages (2019-05, 2023-05) lack legislative data. In both cases, the next
 full vintage covers "since" the gap vintage's date, so the chain remains continuous.
 However, the longer window may obscure the timing of individual legislative actions.
 
-### 5. Pre-2015 Exclusion
+### 5. 2026 Policy-Intent Adjustment
+
+For the 2026-02 vintage only, the parser applies a one-time adjustment that includes
+customs-duty effects classified by CBO as technical changes, treating them as
+fiscal-policy-driven for this tracker.
+
+### 6. Pre-2015 Exclusion
 
 Vintages before 2015-08 are excluded because:
 - Format variations are much more extreme (7+ different sheet naming conventions)

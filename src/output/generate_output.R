@@ -169,16 +169,19 @@ plot_historical_contributions <- function(historical, config, output_dir) {
     jan_dates     <- all_months[month_num == 1]
     quarter_dates <- all_months[month_num %in% c(4, 7, 10)]
     other_dates   <- all_months[!month_num %in% c(1, 4, 7, 10)]
+    jan_dates <- jan_dates[jan_dates >= x_limits[1] & jan_dates <= x_limits[2]]
+    quarter_dates <- quarter_dates[quarter_dates >= x_limits[1] & quarter_dates <= x_limits[2]]
+    other_dates <- other_dates[other_dates >= x_limits[1] & other_dates <= x_limits[2]]
 
     shared_x <- scale_x_date(limits = x_limits,
                               breaks = jan_dates, date_labels = "%Y")
 
     grid_layers <- list(
-      geom_vline(xintercept = as.numeric(other_dates),
+      geom_vline(xintercept = other_dates,
                  color = "grey90", linewidth = 0.2),
-      geom_vline(xintercept = as.numeric(quarter_dates),
+      geom_vline(xintercept = quarter_dates,
                  color = "grey75", linewidth = 0.3),
-      geom_vline(xintercept = as.numeric(jan_dates),
+      geom_vline(xintercept = jan_dates,
                  color = "grey60", linewidth = 0.4)
     )
 
@@ -270,7 +273,7 @@ plot_household_impacts <- function(costs_table, config, output_dir) {
 generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_dir) {
 
   lines <- c(
-    "# Legislative Fiscal Contribution to Interest Rates",
+    "# Fiscal-Policy Contribution to Interest Rates",
     "",
     sprintf("*Generated: %s*", format(Sys.time(), "%Y-%m-%d %H:%M")),
     ""
@@ -283,9 +286,9 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_
     lines <- c(lines,
       sprintf("## %s", f$scenario_label),
       "",
-      sprintf("- **Scenario:** Cumulative legislative impact %s (%d vintages)",
+      sprintf("- **Scenario:** Cumulative fiscal-policy impact %s (%d vintages)",
               tolower(f$scenario_label), f$n_vintages),
-      sprintf("- **Cumulative legislative \\u0394(debt/GDP):** %+.2f pp",
+      sprintf("- **Cumulative fiscal-policy \\u0394(debt/GDP):** %+.2f pp",
               f$cumulative_delta),
       sprintf("- **Estimated contribution to long-term Treasury rates:** %+.0f bp (range: %+.0f to %+.0f)",
               f$rate_effect$preferred, f$rate_effect$low, f$rate_effect$high),
@@ -346,8 +349,9 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_
   for (scenario in c("low", "preferred", "high")) {
     el <- primary$elasticity[[scenario]]
     re <- primary$rate_effect[[scenario]]
+    mortgage_label <- if (!is.null(costs$mortgage)) costs$mortgage$label else costs[[1]]$label
     mortgage <- costs_table[costs_table$scenario == scenario &
-                            costs_table$loan_type == costs[[1]]$label, ]
+                            costs_table$loan_type == mortgage_label, ]
     ma <- if (nrow(mortgage) > 0) mortgage$annual_impact[1] else NA
     src <- switch(scenario,
       low = "Neveu & Schafer (2024)",
@@ -368,15 +372,18 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_
     "updated by Plante, Richter & Zubairy (2025, Dallas Fed WP 2513). It is NOT a",
     "regression re-estimation. The approach:",
     "",
-    "1. From each CBO projection vintage, extracts the **legislative component** of",
-    "   the deficit decomposition (Table A-1 or equivalent)",
-    "2. Divides the 5-year cumulative legislative deficit by projected GDP to get",
-    "   legislative delta(debt/GDP) in percentage points",
+    "1. From each CBO projection vintage, extracts the **fiscal-policy component** of",
+    "   CBO's deficit decomposition (legislative plus documented policy-intent adjustments)",
+    "2. Harmonizes each vintage to an exact 5-year window (t+1 through t+5),",
+    "   then divides by projected GDP to get fiscal-policy delta(debt/GDP) in pp",
     "3. Chains these across consecutive CBO vintages into cumulative series",
     "4. Multiplies by the published elasticity (3 bp per pp, range 2-4)",
     "5. Decomposes into term premium (~75%) and expected short rate (~25%) channels",
     "6. Applies pass-through rates to consumer loan rates",
     "7. Translates into dollar cost impacts via standard amortization",
+    "",
+    "Note: The 2026-02 vintage includes a one-time policy-intent adjustment adding",
+    "customs-duty effects that CBO classified as technical changes.",
     "",
     "### Data Sources",
     "",
