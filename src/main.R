@@ -40,13 +40,15 @@ config_path <- if (length(args) >= 1) args[1] else NULL
 
 # ---- Load Configuration ----
 
-message("=== Deficits, Rates, and Household Costs: Legislative Decomposition Tracker ===\n")
+message("=== Deficits, Rates, and Household Costs: Fiscal-Policy Decomposition Tracker ===\n")
 
 config <- read_config(config_path)
 coefs  <- read_coefficients()
 
 message(sprintf("Elasticity (preferred): %.1f bp/pp debt/GDP", coefs$elasticity$preferred))
 message(sprintf("Projection horizon:     %d years", config$projection_horizon %||% 5))
+message(sprintf("Fetch CBO GitHub:       %s", ifelse(config$fetch$cbo_github, "enabled", "disabled")))
+message(sprintf("Fetch FRED:             %s", ifelse(config$fetch$fred, "enabled", "disabled")))
 message(sprintf("Data root:              %s\n", config$data_root))
 
 # ---- Create Output Directories ----
@@ -62,51 +64,62 @@ message(sprintf("Data vintage:           %s\n", data_dir))
 
 message("--- Step 1: Fetching CBO GitHub data (optional validation) ---")
 
-cbo_github <- tryCatch({
-  fetch_cbo_github(config)
-}, error = function(e) {
-  message(sprintf("  NOTE: %s", e$message))
-  message("  Continuing without GitHub data (not needed for legislative decomposition)...")
-  list(baselines = NULL, debt_at_horizon = data.frame(), all_debt = NULL,
-       dependencies = data.frame(source = character(), series = character(),
-                                 url = character(), retrieved_at = character(),
-                                 stringsAsFactors = FALSE))
-})
-
-save_cbo_github(cbo_github, data_dir)
+if (config$fetch$cbo_github) {
+  cbo_github <- fetch_cbo_github(config)
+  save_cbo_github(cbo_github, data_dir)
+} else {
+  message("  Skipped CBO GitHub fetch (fetch.cbo_github=false).")
+  append_dependencies(data_dir, make_dependency_row(
+    dependency_class = "skipped",
+    required = FALSE,
+    status = "skipped",
+    source = "CBO GitHub",
+    series = "baselines.csv (Debt Held by the Public)",
+    url = config$cbo_github_url,
+    interface = config$interface,
+    version = config$version,
+    vintage = vintage,
+    notes = "Fetch disabled by runtime config"
+  ))
+}
 message("")
 
 # ---- Step 2: Fetch FRED Data (consumer rate context) ----
 
 message("--- Step 2: Fetching FRED data (consumer rate context) ---")
 
-fred_results <- fetch_fred_data(config)
-save_fred_data(fred_results, data_dir)
+if (config$fetch$fred) {
+  fred_results <- fetch_fred_data(config)
+  save_fred_data(fred_results, data_dir)
+} else {
+  message("  Skipped FRED fetch (fetch.fred=false).")
+  append_dependencies(data_dir, make_dependency_row(
+    dependency_class = "skipped",
+    required = FALSE,
+    status = "skipped",
+    source = "FRED",
+    series = "THREEFYTP10,MORTGAGE30US,TERMCBAUTO48NS,DPRIME",
+    url = "https://fred.stlouisfed.org/",
+    interface = config$interface,
+    version = config$version,
+    vintage = vintage,
+    notes = "Fetch disabled by runtime config"
+  ))
+}
 message("")
 
 # ---- Step 3: Parse CBO Excel Files (Budget + Economic + Decomposition) ----
 
 message("--- Step 3: Parsing CBO Excel files (Budget, Economic, & Decomposition) ---")
 
-cbo_excel <- tryCatch({
-  parse_cbo_excel_files(config)
-}, error = function(e) {
-  message(sprintf("  ERROR: %s", e$message))
-  list(budget_vintages = data.frame(), econ_vintages = data.frame(),
-       decomp_vintages = data.frame(),
-       dependencies = data.frame(
-         source = character(), series = character(),
-         url = character(), retrieved_at = character(),
-         stringsAsFactors = FALSE
-  ))
-})
+cbo_excel <- parse_cbo_excel_files(config)
 
 save_cbo_excel(cbo_excel, data_dir)
 message("")
 
 # ---- Step 4: Build Legislative Decomposition Panel ----
 
-message("--- Step 4: Building legislative decomposition panel ---")
+message("--- Step 4: Building fiscal-policy decomposition panel ---")
 
 panel <- build_dataset(cbo_excel, config)
 save_dataset(panel, data_dir)

@@ -8,6 +8,9 @@ library(dplyr)
 library(lubridate)
 
 fetch_fred_data <- function(config) {
+  if (is.null(config$fred_api_key) || trimws(config$fred_api_key) == "") {
+    stop("FRED fetch enabled but fred_api_key is empty in runtime config")
+  }
   fredr_set_key(config$fred_api_key)
 
   series_list <- list(
@@ -34,32 +37,25 @@ fetch_fred_data <- function(config) {
   )
 
   results <- list()
-  deps <- data.frame(
-    source = character(), series = character(),
-    url = character(), retrieved_at = character(),
-    stringsAsFactors = FALSE
-  )
+  deps <- empty_dependency_frame()
 
   for (name in names(series_list)) {
     s <- series_list[[name]]
     message(sprintf("  Fetching FRED: %s (%s)", s$id, s$desc))
 
-    raw <- tryCatch({
+    raw <- tryCatch(
       fredr(
         series_id = s$id,
         observation_start = as.Date("1980-01-01"),
         frequency = NULL
       ) %>%
         select(date, value) %>%
-        filter(!is.na(value))
-    }, error = function(e) {
-      warning(sprintf("Failed to fetch %s: %s", s$id, e$message))
-      NULL
-    })
+        filter(!is.na(value)),
+      error = function(e) stop(sprintf("Failed to fetch %s: %s", s$id, e$message))
+    )
 
-    if (is.null(raw) || nrow(raw) == 0) {
-      message(sprintf("    WARNING: No data for %s", s$id))
-      next
+    if (nrow(raw) == 0) {
+      stop(sprintf("Fetched zero observations for %s", s$id))
     }
 
     # For daily/weekly series, aggregate to monthly averages
@@ -78,12 +74,17 @@ fetch_fred_data <- function(config) {
 
     results[[name]] <- raw
 
-    deps <- rbind(deps, data.frame(
+    deps <- rbind(deps, make_dependency_row(
+      dependency_class = "external_api",
+      required = TRUE,
+      status = "ok",
       source = "FRED",
       series = s$id,
       url = paste0("https://fred.stlouisfed.org/series/", s$id),
-      retrieved_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-      stringsAsFactors = FALSE
+      interface = config$interface,
+      version = config$version,
+      vintage = format(Sys.time(), "%Y%m%d_%H%M%S"),
+      notes = sprintf("%d observations", nrow(raw))
     ))
   }
 

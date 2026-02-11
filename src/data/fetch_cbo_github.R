@@ -64,6 +64,11 @@ fetch_cbo_github <- function(config) {
 
   # Parse vintage dates
   baselines$vintage_date <- parse_vintage_date(baselines$vintage)
+  if (any(is.na(baselines$vintage_date))) {
+    bad <- unique(baselines$vintage[is.na(baselines$vintage_date)])
+    stop(sprintf("Failed to parse %d CBO vintage date(s): %s",
+                 length(bad), paste(head(bad, 10), collapse = ", ")))
+  }
 
   # Filter to debt component
   # CBO eval-projections repo uses "debt" as the component name.
@@ -125,12 +130,17 @@ fetch_cbo_github <- function(config) {
                   max(debt_at_horizon$vintage_date, na.rm = TRUE)))
 
   # Build dependency record
-  deps <- data.frame(
+  deps <- make_dependency_row(
+    dependency_class = "external_api",
+    required = TRUE,
+    status = "ok",
     source = "CBO GitHub",
     series = "baselines.csv (Debt Held by the Public)",
     url = config$cbo_github_url,
-    retrieved_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-    stringsAsFactors = FALSE
+    interface = config$interface,
+    version = config$version,
+    vintage = format(Sys.time(), "%Y%m%d_%H%M%S"),
+    notes = sprintf("%d rows, horizon=%d", nrow(baselines), horizon)
   )
 
   list(
