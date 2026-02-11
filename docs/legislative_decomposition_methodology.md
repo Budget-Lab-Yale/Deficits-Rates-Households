@@ -25,13 +25,13 @@ estimated effects on long-term Treasury rates.
 
 ## Data Sources
 
-- **CBO Budget Projections** (42 Excel files, 2007-2025) -- legislative decomposition tables
-- **CBO Economic Projections** (22 Excel files, 2014-2025) -- projected nominal GDP
+- **CBO Budget Projections** (43 Excel files, 2007-2026) -- legislative decomposition tables
+- **CBO Economic Projections** (23 Excel files, 2014-2026) -- projected nominal GDP
 - **FRED** -- current consumer rate levels (mortgage, auto, prime)
 
 ## Vintage Coverage
 
-We use 19 CBO projection vintages from August 2015 through January 2025, forming
+We use 20 CBO projection vintages from August 2015 through February 2026, forming
 a continuous chain. Each vintage reports the 5-year cumulative legislative deficit
 change (in billions) since the immediately preceding CBO baseline.
 
@@ -59,8 +59,9 @@ decomposition and are skipped; the subsequent full vintage bridges the gap.
 | Feb 2024 | May 2023 | **-993.0** | **Fiscal Responsibility Act** (deficit reduction) |
 | Jun 2024 | Feb 2024 | +648.4 | FY2024 appropriations + supplemental aid |
 | Jan 2025 | Jun 2024 | +124.6 | Continuing resolutions, minor legislation |
+| Feb 2026 | Jan 2025 | **+2,285.3** | **2025 Reconciliation Act** (TCJA extension + tax cuts, partially offset by spending cuts) |
 
-**Cumulative:** +$5,981B in 5-year legislative deficits across all 19 vintages.
+**Cumulative:** +$8,267B in 5-year legislative deficits across all 20 vintages.
 
 Positive values indicate legislation that **increased** projected deficits (tax cuts
 or spending increases). Negative values indicate deficit reduction (spending cuts or
@@ -91,22 +92,22 @@ revenue increases).
 8. **Household costs:** Translate rate changes into dollar impacts via standard
    amortization.
 
-## Current Results (January 2025 Vintage)
+## Current Results (February 2026 Vintage)
 
 ### Rate Effects
 
 | Scenario | Cumulative delta(debt/GDP) | 10yr Rate Effect | Range |
 |----------|---------------------------:|:----------------:|:-----:|
-| Since 2015 | +25.81 pp | **+77 bp** | +52 to +103 bp |
-| Since 2022 | +3.82 pp | **+11 bp** | +8 to +15 bp |
+| Since 2015 | +31.70 pp | **+95 bp** | +63 to +127 bp |
+| Since 2022 | +9.71 pp | **+29 bp** | +19 to +39 bp |
 
 ### Household Cost Impacts (Since 2015 Scenario)
 
 | Loan Type | Rate Change | Annual Impact | Lifetime Impact |
 |-----------|:-----------:|--------------:|----------------:|
-| 30-year fixed mortgage ($400K) | +77 bp | +$2,068/yr | +$62,029 |
-| 48-month auto loan ($35K) | +58 bp | +$137/yr | +$767 |
-| 5-year small business ($750K) | +19 bp | +$733/yr | +$3,664 |
+| 30-year fixed mortgage ($400K) | +95 bp | +$2,548/yr | +$76,443 |
+| 48-month auto loan ($35K) | +71 bp | +$169/yr | +$942 |
+| 5-year small business ($750K) | +24 bp | +$900/yr | +$4,501 |
 
 ## Analytical Considerations
 

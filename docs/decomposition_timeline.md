@@ -1,16 +1,16 @@
 # CBO Budget Projections: Legislative Decomposition Timeline
 
-This reference documents the 19 CBO Budget Projections vintages used in the
+This reference documents the 20 CBO Budget Projections vintages used in the
 legislative decomposition pipeline, the specific parsing choices made for each,
 and known concerns.
 
 ## Overview
 
-- **42 total Budget Projections files** (2007-01 to 2025-01)
-- **19 vintages used** (2015-08 to 2025-01) -- continuous chain
+- **43 total Budget Projections files** (2007-01 to 2026-02)
+- **20 vintages used** (2015-08 to 2026-02) -- continuous chain
 - **2 vintages skipped** in the 2015+ range: 2019-05, 2023-05 (no legislative data)
 - **All pre-2015 vintages excluded** -- inconsistent formats, large gaps, no GDP denominator
-- **GDP denominator:** CBO Economic Projections Excel files (22 files, 2014-08 to 2025-09)
+- **GDP denominator:** CBO Economic Projections Excel files (23 files, 2014-08 to 2026-02)
 
 ## Parser Approach
 
@@ -50,8 +50,9 @@ All values verified against raw Excel files (spot-checked Feb 2026).
 | 2024-02 | `Table 3-1` | May 2023 | -993.0 | No | **-993.0** | **Fiscal Responsibility Act** (debt ceiling deal, deficit reduction) |
 | 2024-06 | `Table 3-1` | Feb 2024 | +648.4 | No | **+648.4** | FY2024 appropriations + supplemental aid packages |
 | 2025-01 | `Table A-1` | Jun 2024 | +124.6 | No | **+124.6** | Continuing resolutions, minor legislation |
+| 2026-02 | `Table 5-1` | Jan 2025 | +2285.3 | No | **+2285.3** | **2025 Reconciliation Act** (TCJA extension + tax/spending changes) |
 
-**Cumulative sum (all 19 vintages):** +$5,981B in 5-year legislative deficits
+**Cumulative sum (all 20 vintages):** +$8,267B in 5-year legislative deficits
 
 ## Skipped Vintages (2015+ Range)
 
@@ -69,7 +70,7 @@ all values so that **positive = increases the deficit** (more borrowing).
 |----------|------------------|------------|---------------|
 | 2015-08 | "Total Legislative Changes" + footnote "Negative = increase" | Negative raw = increases deficit | Negate (`negate=TRUE`) |
 | 2016-01 to 2023-02 | "Increase (-) in the Deficit from Legislative Changes" | Negative raw = increases deficit | Negate (`negate=TRUE`) |
-| 2024-02 to 2025-01 | "Increase or decrease (-) in the deficit from legislative changes" | Positive raw = increases deficit | Keep as-is (`negate=FALSE`) |
+| 2024-02 to 2026-02 | "Increase or decrease (-) in the deficit from legislative changes" | Positive raw = increases deficit | Keep as-is (`negate=FALSE`) |
 
 The switch from `negate=TRUE` to `negate=FALSE` occurs at the 2024-02 vintage.
 This was verified by checking that the Fiscal Responsibility Act (a deficit-reduction
@@ -87,6 +88,7 @@ sheet to use and why:
 | 2024-02 and 2024-06 | Use `Table 3-1` | These files' `Table 1-6` is discretionary budget authority, not a deficit decomposition. `Table 3-1` has the full L/E/T breakdown. |
 | 2016-03, 2017-06, 2020-03 | Use `Table 6` | Their `Table 5` is spending projections (mandatory or discretionary), not a decomposition. `Table 6` has the "Changes in Baseline Projections of the Deficit" decomposition. |
 | 2023-02 | Use `Table A-1` (not `Table 1-6 `) | The `Table 1-6` sheet has a trailing space in its name and is less reliable. `Table A-1` has the same data. |
+| 2026-02 | Use `Table 5-1` | `Table 3-1` is an outlays table in this vintage. `Table 5-1` has the full L/E/T deficit decomposition ("Changes in CBO's Baseline Projections of the Deficit Since January 2025"). |
 
 ## Methodological Concerns
 
