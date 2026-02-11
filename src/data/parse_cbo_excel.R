@@ -536,7 +536,8 @@ DECOMP_LOOKUP <- list(
   # 2023-05: Table 5 has only Technical Changes, no legislative data
   "2024-02" = list(sheet = "Table 3-1",     since = "2023-05-01", negate = FALSE),
   "2024-06" = list(sheet = "Table 3-1",     since = "2024-02-01", negate = FALSE),
-  "2025-01" = list(sheet = "Table A-1",     since = "2024-06-01", negate = FALSE)
+  "2025-01" = list(sheet = "Table A-1",     since = "2024-06-01", negate = FALSE),
+  "2026-02" = list(sheet = "Table 5-1",     since = "2025-01-01", negate = FALSE)
 )
 
 
