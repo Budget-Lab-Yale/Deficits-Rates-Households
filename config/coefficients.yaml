@@ -21,23 +21,24 @@ passthrough:
   auto_5yr: 0.50
   small_business_5yr: 0.25
 
-# Loan parameters (2024 averages)
+# Loan parameters (late November 2025 vintage, matching CBO data cutoff)
+# See docs/passthrough_literature_review.md §4 for sourcing details
 loans:
   mortgage:
     label: "30-year fixed mortgage"
-    principal: 330000     # Median home $412,500 less 20% down
+    principal: 329840     # FRED HOSMEDUSM052N Sep 2025 median $412,300 less 20% down
     term_months: 360
-    baseline_rate_pct: 6.72
-    source: "NAR, Freddie Mac PMMS"
+    baseline_rate_pct: 6.23
+    source: "FRED HOSMEDUSM052N Sep 2025, Freddie Mac PMMS Nov 26 2025"
   auto:
     label: "New auto loan"
-    principal: 41086
+    principal: 42332      # Experian State of Auto Finance Q3 2025
     term_months: 67
-    baseline_rate_pct: 7.10
-    source: "Lending Tree"
+    baseline_rate_pct: 7.51
+    source: "Experian Q3 2025, FRED TERMCBAUTO48NS Q3 2025"
   small_business:
     label: "Small business loan"
-    principal: 663000
+    principal: 663000     # B2BReview/SBA 2024 (no 2025 update available)
     term_months: 60
-    baseline_rate_pct: 7.50
-    source: "B2BReview, SBA"
+    baseline_rate_pct: 7.00
+    source: "B2BReview/SBA, FRED DPRIME Nov 2025"
