@@ -3,8 +3,16 @@
 # FRED API key (only needed when fetch.fred=true)
 fred_api_key: ""
 
-# Projection horizon (years ahead in CBO projections)
-projection_horizon: 5
+# CBO data source mode
+# - eval_csv_primary: use eval-projections CSV inputs + latest Excel append
+# - excel_legacy: parse all historical Excel decomposition/econ files
+cbo_data_source: "eval_csv_primary"
+
+# Projection horizon settings
+# Window is fiscal years t+window_start_offset through
+# t+window_start_offset+projection_horizon-1.
+projection_horizon: 10
+window_start_offset: 0
 # Maximum allowed lag between budget vintage and matched econ vintage
 max_econ_lag_days: 365
 
@@ -20,6 +28,20 @@ parse_budget_validation: false
 # CBO GitHub data URLs
 cbo_github_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/baselines.csv"
 cbo_gdp_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/actual_GDP.csv"
+
+# CSV-primary inputs (relative to repo root)
+cbo_eval_dir: "../Data/CBO Reports/Projections Evaluation Data"
+cbo_eval_baselines_csv: "../Data/CBO Reports/Projections Evaluation Data/baselines.csv"
+cbo_eval_changes_csv: "../Data/CBO Reports/Projections Evaluation Data/baseline_changes.csv"
+
+# Existing GDP-vintage table used for denominator matching in the 2015+ sample.
+# If missing, pipeline falls back to latest archived cbo_excel_gdp.csv under data_root.
+cbo_gdp_vintage_csv: "../Data/CBO Reports/Projections Evaluation Data/cbo_gdp_vintages.csv"
+
+# CSV sample and latest Excel append
+csv_sample_start_vintage: "2015-08-01"
+append_latest_excel: true
+latest_excel_append_vintage: "2026-02-01"
 
 # Local CBO Excel files (relative to repo root)
 cbo_budget_dir: "../Data/CBO Reports/Budget Projections"

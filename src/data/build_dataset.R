@@ -3,7 +3,7 @@
 # Uses CBO Table A-1 (or equivalent) legislative deficit components
 # and CBO Economic Projections GDP to compute legislative delta(debt/GDP).
 #
-# Output: data.frame with harmonized 5-year fiscal-policy increments:
+# Output: data.frame with harmonized horizon-window fiscal-policy increments:
 #   vintage_date, since_date, legislative_deficit_5yr_bn, projected_gdp_bn,
 #   legislative_delta_debt_gdp, cumulative_* scenario columns
 
@@ -11,7 +11,8 @@ library(dplyr)
 
 build_dataset <- function(cbo_excel, config) {
 
-  horizon <- config$projection_horizon %||% 5
+  horizon <- config$projection_horizon %||% 10
+  start_offset <- config$window_start_offset %||% 0
   max_lag <- config$max_econ_lag_days %||% 365
   message("Building fiscal-policy decomposition panel...")
 
@@ -28,7 +29,7 @@ build_dataset <- function(cbo_excel, config) {
   # ---- 1. For each decomposition vintage, find GDP at the horizon year ----
 
   decomp$vintage_year <- as.integer(format(decomp$vintage_date, "%Y"))
-  decomp$horizon_year <- decomp$vintage_year + horizon
+  decomp$horizon_year <- decomp$vintage_year + start_offset + horizon - 1
 
   # Match each decomp vintage to the latest econ vintage on/before the
   # decomposition date, within max_lag days (no look-ahead matching).
@@ -117,7 +118,8 @@ build_dataset <- function(cbo_excel, config) {
   message(sprintf("  Latest vintage: %s (since %s)",
                   format(latest$vintage_date, "%b %Y"),
                   format(latest$since_date, "%b %Y")))
-  message(sprintf("  Latest harmonized fiscal-policy deficit 5yr: $%.1fB",
+  message(sprintf("  Latest harmonized fiscal-policy deficit (%dyr window): $%.1fB",
+                  horizon,
                   latest$legislative_deficit_5yr_bn))
   message(sprintf("  Latest fiscal-policy delta(debt/GDP): %+.2f pp",
                   latest$legislative_delta_debt_gdp))

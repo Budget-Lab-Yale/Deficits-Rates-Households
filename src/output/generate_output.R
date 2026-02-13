@@ -39,7 +39,7 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
   })
 
   # ---- 5. Markdown summary ----
-  generate_markdown_summary(fiscal, costs, costs_table, panel, output_dir)
+  generate_markdown_summary(fiscal, costs, costs_table, panel, config, output_dir)
 
   message(sprintf("  All output written to %s", output_dir))
 }
@@ -49,12 +49,13 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
 
 plot_legislative_delta <- function(panel, config, output_dir) {
   # Bar chart of per-vintage legislative delta(debt/GDP)
+  horizon <- config$projection_horizon %||% 10
   p <- ggplot(panel, aes(x = vintage_date, y = legislative_delta_debt_gdp)) +
     geom_col(fill = "#E08214", width = 50) +
     geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
     labs(
       title = "Legislative Contribution to Debt/GDP per CBO Vintage",
-      subtitle = "5-year cumulative legislative deficit \u00f7 projected GDP",
+      subtitle = sprintf("%d-year cumulative fiscal-policy deficit \u00f7 projected GDP", horizon),
       x = "CBO projection vintage",
       y = "Legislative \u0394(debt/GDP) (pp)"
     ) +
@@ -270,7 +271,17 @@ plot_household_impacts <- function(costs_table, config, output_dir) {
 
 # ---- Markdown Summary ----
 
-generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_dir) {
+generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config, output_dir) {
+  horizon <- config$projection_horizon %||% 10
+  start_offset <- config$window_start_offset %||% 0
+  window_start <- if (start_offset == 0) "t" else sprintf("t+%d", start_offset)
+  window_end <- sprintf("t+%d", start_offset + horizon - 1)
+  source_mode <- config$cbo_data_source %||% "excel_legacy"
+  data_source_line <- if (identical(source_mode, "eval_csv_primary")) {
+    "- **Fiscal-policy decomposition:** CBO eval-projections CSVs + latest Excel append"
+  } else {
+    "- **Fiscal-policy decomposition:** CBO Budget Projections Excel files"
+  }
 
   lines <- c(
     "# Fiscal-Policy Contribution to Interest Rates",
@@ -374,7 +385,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_
     "",
     "1. From each CBO projection vintage, extracts the **fiscal-policy component** of",
     "   CBO's deficit decomposition (legislative plus documented policy-intent adjustments)",
-    "2. Harmonizes each vintage to an exact 5-year window (t+1 through t+5),",
+    sprintf("2. Harmonizes each vintage to an exact %d-year window (%s through %s),", horizon, window_start, window_end),
     "   then divides by projected GDP to get fiscal-policy delta(debt/GDP) in pp",
     "3. Chains these across consecutive CBO vintages into cumulative series",
     "4. Multiplies by the published elasticity (3 bp per pp, range 2-4)",
@@ -387,9 +398,10 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, output_
     "",
     "### Data Sources",
     "",
-    sprintf("- **Decomposition vintages:** %d CBO Budget Projections files parsed",
+    sprintf("- **Decomposition vintages:** %d CBO projection vintages",
             nrow(panel)),
-    "- **GDP denominator:** CBO Economic Projections Excel files",
+    data_source_line,
+    "- **GDP denominator:** CBO GDP vintage table (+ latest Economic Projections Excel append)",
     "- **Consumer rates:** FRED (MORTGAGE30US, TERMCBAUTO48NS, DPRIME)",
     "",
     "## Sources",

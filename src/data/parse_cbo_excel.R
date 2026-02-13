@@ -507,7 +507,7 @@ parse_one_econ_file <- function(xlsx_path, vintage_date) {
   fy_sheet <- fy_sheet[1]
 
   raw <- tryCatch(
-    read_excel(xlsx_path, sheet = fy_sheet, col_names = FALSE),
+    read_excel(xlsx_path, sheet = fy_sheet, col_names = FALSE, .name_repair = "minimal"),
     error = function(e) NULL
   )
   if (is.null(raw)) return(NULL)
@@ -733,14 +733,17 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
   year_row  <- year_info$row
   year_cols <- year_info$cols
   years     <- year_info$years
-  horizon <- config$projection_horizon %||% 5
+  horizon <- config$projection_horizon %||% 10
+  start_offset <- config$window_start_offset %||% 0
+  if (horizon <= 0) stop("projection_horizon must be positive")
+  if (start_offset < 0) stop("window_start_offset must be >= 0")
   vintage_year <- as.integer(format(vintage_date, "%Y"))
-  target_end_year <- vintage_year + horizon
+  target_end_year <- vintage_year + start_offset + horizon - 1
 
-  # ---- 2. Find the 5-year cumulative total column ----
-  five_yr_col <- find_five_yr_col(raw, year_row, year_cols, years, target_end_year)
+  # ---- 2. Find the reported cumulative total column ----
+  five_yr_col <- find_five_yr_col(raw, year_row, year_cols, years, target_end_year, horizon)
   if (is.null(five_yr_col)) {
-    stop("Cannot find an unambiguous reported 5-year cumulative column")
+    stop(sprintf("Cannot find an unambiguous reported cumulative column (horizon=%d)", horizon))
   }
 
   # ---- 3. Find the legislative deficit total row ----
@@ -770,7 +773,7 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
   window_value <- if (lookup$negate) -raw_window_value else raw_window_value
   annual_values <- if (lookup$negate) -annual_raw else annual_raw
 
-  target_years <- (vintage_year + 1):(vintage_year + horizon)
+  target_years <- (vintage_year + start_offset):(vintage_year + start_offset + horizon - 1)
   idx <- match(target_years, years)
   if (any(is.na(idx))) {
     missing <- target_years[is.na(idx)]
@@ -778,7 +781,7 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
                  horizon, paste(missing, collapse = ", ")))
   }
 
-  # Harmonized 5-year fiscal-policy total is the exact sum of t+1..t+5 annual values.
+  # Harmonized fiscal-policy total is the exact sum over the configured horizon window.
   value_5yr <- sum(annual_values[idx])
 
   # ---- 5. Adjust for executive-action tariffs if flagged ----
@@ -825,8 +828,8 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
 }
 
 
-find_five_yr_col <- function(raw, year_row, year_cols, years, target_end_year) {
-  # Find the column containing the 5-year cumulative total.
+find_five_yr_col <- function(raw, year_row, year_cols, years, target_end_year, horizon = 5) {
+  # Find the column containing the cumulative horizon total.
   nc <- ncol(raw)
   last_yr_col <- max(year_cols)
   candidates <- integer(0)
@@ -850,9 +853,11 @@ find_five_yr_col <- function(raw, year_row, year_cols, years, target_end_year) {
       if (length(range_years) == 2) {
         end_year <- range_years[2]
         span <- range_years[2] - range_years[1] + 1
-        if (span >= 4 && span <= 6) {
+        min_span <- max(2, horizon - 1)
+        max_span <- horizon + 1
+        if (span >= min_span && span <= max_span) {
           candidates <- c(candidates, c)
-          scores <- c(scores, abs(end_year - target_end_year) + abs(span - 5) * 0.01)
+          scores <- c(scores, abs(end_year - target_end_year) + abs(span - horizon) * 0.01)
           next
         }
       }

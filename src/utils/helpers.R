@@ -36,9 +36,14 @@ find_repo_root <- function() {
 }
 
 apply_config_defaults <- function(config) {
-  config$projection_horizon <- config$projection_horizon %||% 5
+  config$projection_horizon <- config$projection_horizon %||% 10
+  config$window_start_offset <- config$window_start_offset %||% 0
   config$max_econ_lag_days <- config$max_econ_lag_days %||% 365
   config$parse_budget_validation <- isTRUE(config$parse_budget_validation %||% FALSE)
+  config$cbo_data_source <- config$cbo_data_source %||% "eval_csv_primary"
+  config$append_latest_excel <- isTRUE(config$append_latest_excel %||% TRUE)
+  config$csv_sample_start_vintage <- config$csv_sample_start_vintage %||% "2015-08-01"
+  config$latest_excel_append_vintage <- config$latest_excel_append_vintage %||% "2026-02-01"
 
   if (is.null(config$fetch)) config$fetch <- list()
   config$fetch$cbo_github <- isTRUE(config$fetch$cbo_github %||% FALSE)

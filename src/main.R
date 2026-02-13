@@ -28,6 +28,7 @@ source(file.path(.repo_root, "src", "utils", "helpers.R"))
 source(file.path(.repo_root, "src", "data", "fetch_cbo_github.R"))
 source(file.path(.repo_root, "src", "data", "fetch_fred.R"))
 source(file.path(.repo_root, "src", "data", "parse_cbo_excel.R"))
+source(file.path(.repo_root, "src", "data", "parse_cbo_eval_csv.R"))
 source(file.path(.repo_root, "src", "data", "build_dataset.R"))
 source(file.path(.repo_root, "src", "model", "fiscal_contribution.R"))
 source(file.path(.repo_root, "src", "model", "amortize.R"))
@@ -47,6 +48,7 @@ coefs  <- read_coefficients()
 
 message(sprintf("Elasticity (preferred): %.1f bp/pp debt/GDP", coefs$elasticity$preferred))
 message(sprintf("Projection horizon:     %d years", config$projection_horizon %||% 5))
+message(sprintf("CBO data source:        %s", config$cbo_data_source %||% "excel_legacy"))
 message(sprintf("Fetch CBO GitHub:       %s", ifelse(config$fetch$cbo_github, "enabled", "disabled")))
 message(sprintf("Fetch FRED:             %s", ifelse(config$fetch$fred, "enabled", "disabled")))
 message(sprintf("Data root:              %s\n", config$data_root))
@@ -108,11 +110,15 @@ if (config$fetch$fred) {
 }
 message("")
 
-# ---- Step 3: Parse CBO Excel Files (Budget + Economic + Decomposition) ----
+# ---- Step 3: Parse CBO Data (CSV-primary or legacy Excel) ----
 
-message("--- Step 3: Parsing CBO Excel files (Budget, Economic, & Decomposition) ---")
+message("--- Step 3: Parsing CBO fiscal/GDP source data ---")
 
-cbo_excel <- parse_cbo_excel_files(config)
+if (identical(config$cbo_data_source, "eval_csv_primary")) {
+  cbo_excel <- parse_cbo_eval_primary(config)
+} else {
+  cbo_excel <- parse_cbo_excel_files(config)
+}
 
 save_cbo_excel(cbo_excel, data_dir)
 message("")
