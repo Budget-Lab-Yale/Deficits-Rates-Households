@@ -41,6 +41,9 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
   # ---- 5. Markdown summary ----
   generate_markdown_summary(fiscal, costs, costs_table, panel, config, output_dir)
 
+  # ---- 6. Publication workbook ----
+  write_interest_cost_impacts_workbook(fiscal, costs, output_dir)
+
   message(sprintf("  All output written to %s", output_dir))
 }
 
@@ -416,4 +419,178 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
 
   writeLines(lines, file.path(output_dir, "summary.md"))
   message("  Saved summary.md")
+}
+
+
+# ---- Publication Workbook ----
+
+compute_impacts_for_bps <- function(loan_cost, rate_change_bps) {
+  principal <- loan_cost$principal
+  term_months <- loan_cost$term_months
+  observed_rate <- loan_cost$scenarios$preferred$observed_rate
+  counterfactual_rate <- observed_rate - rate_change_bps / 100
+
+  observed_annual <- amortize_annual_payment(principal, observed_rate, term_months)
+  counterfactual_annual <- amortize_annual_payment(principal, counterfactual_rate, term_months)
+  observed_total <- amortize_total_cost(principal, observed_rate, term_months)
+  counterfactual_total <- amortize_total_cost(principal, counterfactual_rate, term_months)
+
+  list(
+    rate_pp = rate_change_bps / 100,
+    annual_impact = observed_annual - counterfactual_annual,
+    lifetime_impact = observed_total - counterfactual_total
+  )
+}
+
+
+build_interest_cost_table_rows <- function(fiscal, costs) {
+  if (is.null(fiscal$since_2015) || is.null(fiscal$since_2022)) {
+    stop("Interest-cost workbook requires both since_2015 and since_2022 scenarios")
+  }
+
+  rate_2015 <- fiscal$since_2015$consumer_rates
+  rate_2022 <- fiscal$since_2022$consumer_rates
+
+  m_2015 <- compute_impacts_for_bps(costs$mortgage, rate_2015$mortgage_30yr$preferred)
+  m_2022 <- compute_impacts_for_bps(costs$mortgage, rate_2022$mortgage_30yr$preferred)
+
+  sb_2015 <- compute_impacts_for_bps(costs$small_business, rate_2015$small_business_5yr$preferred)
+  sb_2022 <- compute_impacts_for_bps(costs$small_business, rate_2022$small_business_5yr$preferred)
+
+  a_2015 <- compute_impacts_for_bps(costs$auto, rate_2015$auto_5yr$preferred)
+  a_2022 <- compute_impacts_for_bps(costs$auto, rate_2022$auto_5yr$preferred)
+
+  mortgage_principal <- costs$mortgage$principal
+  mortgage_sale_price <- round(mortgage_principal / 0.8, 0)
+
+  rows <- data.frame(
+    label = c(
+      "Thirty-year home mortgage",
+      "Median sale price (Q3 2025)",
+      "Less 20% down",
+      "Fiscal-policy rate effect (percentage point)",
+      "Annual interest cost effect",
+      "Cumulative lifetime cost effect",
+      "",
+      "Small business loan",
+      "Average loan balance (2024)",
+      "Fiscal-policy rate effect (percentage point)",
+      "Annual interest cost effect",
+      "Cumulative lifetime cost effect",
+      "",
+      "Auto loan",
+      "Average new auto loan principal (Q3 2025)",
+      "Fiscal-policy rate effect (percentage point)",
+      "Annual interest cost effect",
+      "Cumulative lifetime cost effect",
+      ""
+    ),
+    since_2015 = c(
+      NA, mortgage_sale_price, mortgage_principal,
+      m_2015$rate_pp, round(m_2015$annual_impact, 0), round(m_2015$lifetime_impact, 0),
+      NA,
+      NA, costs$small_business$principal,
+      sb_2015$rate_pp, round(sb_2015$annual_impact, 0), round(sb_2015$lifetime_impact, 0),
+      NA,
+      NA, costs$auto$principal,
+      a_2015$rate_pp, round(a_2015$annual_impact, 0), round(a_2015$lifetime_impact, 0),
+      NA
+    ),
+    since_2022 = c(
+      NA, mortgage_sale_price, mortgage_principal,
+      m_2022$rate_pp, round(m_2022$annual_impact, 0), round(m_2022$lifetime_impact, 0),
+      NA,
+      NA, costs$small_business$principal,
+      sb_2022$rate_pp, round(sb_2022$annual_impact, 0), round(sb_2022$lifetime_impact, 0),
+      NA,
+      NA, costs$auto$principal,
+      a_2022$rate_pp, round(a_2022$annual_impact, 0), round(a_2022$lifetime_impact, 0),
+      NA
+    ),
+    row_type = c(
+      "section_header", "principal", "principal", "rate", "cost", "cost",
+      "blank",
+      "section_header", "principal", "rate", "cost", "cost",
+      "blank",
+      "section_header", "principal", "rate", "cost", "cost",
+      "blank"
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  rows
+}
+
+
+write_interest_cost_impacts_workbook <- function(fiscal, costs, output_dir) {
+  rows <- build_interest_cost_table_rows(fiscal, costs)
+  output_path <- file.path(output_dir, "interest_cost_impacts_table.xlsx")
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    stop("Package 'openxlsx' is required to write interest_cost_impacts_table.xlsx")
+  }
+
+  write_interest_cost_impacts_workbook_r(rows, output_path)
+  message(sprintf("  Saved %s (R/openxlsx)", basename(output_path)))
+}
+
+
+write_interest_cost_impacts_workbook_r <- function(rows, output_path) {
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Interest Cost Impacts")
+
+  title_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 12, textDecoration = "bold", halign = "left")
+  subtitle_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "left")
+  header_style <- openxlsx::createStyle(
+    fontName = "Calibri", fontSize = 10, textDecoration = "bold",
+    halign = "center", valign = "center", fgFill = "#F2F2F2",
+    border = c("top", "bottom"), borderColour = "#D9D9D9"
+  )
+  label_header_style <- openxlsx::createStyle(
+    fontName = "Calibri", fontSize = 10, textDecoration = "bold",
+    halign = "left", valign = "center", fgFill = "#F2F2F2",
+    border = c("top", "bottom"), borderColour = "#D9D9D9"
+  )
+  label_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "left", valign = "center")
+  section_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, textDecoration = "bold", halign = "left", valign = "center")
+  num_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "right", numFmt = "#,##0")
+  rate_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "right", numFmt = "0.00")
+
+  openxlsx::writeData(wb, 1, x = "Interest Cost Impacts of Cumulative Fiscal Policy", startCol = 1, startRow = 1, colNames = FALSE)
+  openxlsx::mergeCells(wb, 1, cols = 1:3, rows = 1)
+  openxlsx::addStyle(wb, 1, title_style, rows = 1, cols = 1, gridExpand = FALSE)
+
+  openxlsx::writeData(wb, 1, x = "Costs expressed in current dollars at annual rates", startCol = 1, startRow = 2, colNames = FALSE)
+  openxlsx::mergeCells(wb, 1, cols = 1:3, rows = 2)
+  openxlsx::addStyle(wb, 1, subtitle_style, rows = 2, cols = 1, gridExpand = FALSE)
+
+  openxlsx::writeData(wb, 1, x = "Cumulative\nsince 2015", startCol = 2, startRow = 4, colNames = FALSE)
+  openxlsx::writeData(wb, 1, x = "Cumulative\nsince 2022", startCol = 3, startRow = 4, colNames = FALSE)
+  openxlsx::addStyle(wb, 1, label_header_style, rows = 4, cols = 1, gridExpand = FALSE)
+  openxlsx::addStyle(wb, 1, header_style, rows = 4, cols = 2:3, gridExpand = TRUE)
+
+  out_rows <- rows[, c("label", "since_2015", "since_2022")]
+  openxlsx::writeData(wb, 1, out_rows, startCol = 1, startRow = 5, colNames = FALSE, keepNA = FALSE)
+
+  data_row_start <- 5
+  for (i in seq_len(nrow(rows))) {
+    r <- data_row_start + i - 1
+    row_type <- rows$row_type[i]
+
+    if (identical(row_type, "section_header")) {
+      openxlsx::addStyle(wb, 1, section_style, rows = r, cols = 1, gridExpand = FALSE, stack = TRUE)
+    } else {
+      openxlsx::addStyle(wb, 1, label_style, rows = r, cols = 1, gridExpand = FALSE, stack = TRUE)
+    }
+
+    if (identical(row_type, "rate")) {
+      openxlsx::addStyle(wb, 1, rate_style, rows = r, cols = 2:3, gridExpand = TRUE, stack = TRUE)
+    } else {
+      openxlsx::addStyle(wb, 1, num_style, rows = r, cols = 2:3, gridExpand = TRUE, stack = TRUE)
+    }
+  }
+
+  openxlsx::setColWidths(wb, 1, cols = 1, widths = 52)
+  openxlsx::setColWidths(wb, 1, cols = 2:3, widths = 22)
+  openxlsx::freezePane(wb, 1, firstActiveRow = 5, firstActiveCol = 1)
+  openxlsx::saveWorkbook(wb, output_path, overwrite = TRUE)
 }
