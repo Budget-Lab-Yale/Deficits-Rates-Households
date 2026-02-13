@@ -152,7 +152,7 @@ compute_historical_contributions <- function(panel, coefs, config) {
         cumulative_bp  = cumsum(rate_effect_bp)
       ) %>%
       select(scenario, scenario_label, vintage_date, horizon_year,
-             legislative_deficit_5yr_bn, legislative_delta_debt_gdp,
+             legislative_deficit_horizon_bn, legislative_delta_debt_gdp,
              rate_effect_bp, cumulative_bp)
 
     all_rows[[scenario_name]] <- contributions

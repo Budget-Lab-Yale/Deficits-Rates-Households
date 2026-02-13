@@ -4,7 +4,7 @@
 # and CBO Economic Projections GDP to compute legislative delta(debt/GDP).
 #
 # Output: data.frame with harmonized horizon-window fiscal-policy increments:
-#   vintage_date, since_date, legislative_deficit_5yr_bn, projected_gdp_bn,
+#   vintage_date, since_date, legislative_deficit_horizon_bn, projected_gdp_bn,
 #   legislative_delta_debt_gdp, cumulative_* scenario columns
 
 library(dplyr)
@@ -65,9 +65,9 @@ build_dataset <- function(cbo_excel, config) {
 
   # ---- 2. Compute legislative delta(debt/GDP) in percentage points ----
 
-  # legislative_deficit_5yr_bn is already positive = increases deficit (more debt)
+  # legislative_deficit_horizon_bn is already positive = increases deficit (more debt)
   # Divide by projected GDP to get approximate pp of GDP
-  decomp$legislative_delta_debt_gdp <- (decomp$legislative_deficit_5yr_bn /
+  decomp$legislative_delta_debt_gdp <- (decomp$legislative_deficit_horizon_bn /
                                          decomp$projected_gdp_bn) * 100
 
   if (any(is.na(decomp$legislative_delta_debt_gdp))) {
@@ -120,7 +120,7 @@ build_dataset <- function(cbo_excel, config) {
                   format(latest$since_date, "%b %Y")))
   message(sprintf("  Latest harmonized fiscal-policy deficit (%dyr window): $%.1fB",
                   horizon,
-                  latest$legislative_deficit_5yr_bn))
+                  latest$legislative_deficit_horizon_bn))
   message(sprintf("  Latest fiscal-policy delta(debt/GDP): %+.2f pp",
                   latest$legislative_delta_debt_gdp))
 
@@ -137,7 +137,7 @@ build_dataset <- function(cbo_excel, config) {
   # Select and order output columns
   base_cols <- c(
     "vintage_date", "since_date", "horizon_year",
-    "legislative_deficit_5yr_bn", "legislative_deficit_window_bn",
+    "legislative_deficit_horizon_bn", "legislative_deficit_window_bn",
     "harmonized_years", "reported_window_label", "reported_window_span_years",
     "projected_gdp_bn", "econ_vintage_used", "legislative_delta_debt_gdp",
     "sheet_name"

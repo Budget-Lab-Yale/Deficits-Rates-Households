@@ -454,11 +454,11 @@ build_interest_cost_table_rows <- function(fiscal, costs) {
   m_2015 <- compute_impacts_for_bps(costs$mortgage, rate_2015$mortgage_30yr$preferred)
   m_2022 <- compute_impacts_for_bps(costs$mortgage, rate_2022$mortgage_30yr$preferred)
 
-  sb_2015 <- compute_impacts_for_bps(costs$small_business, rate_2015$small_business_5yr$preferred)
-  sb_2022 <- compute_impacts_for_bps(costs$small_business, rate_2022$small_business_5yr$preferred)
+  sb_2015 <- compute_impacts_for_bps(costs$small_business, rate_2015$small_business$preferred)
+  sb_2022 <- compute_impacts_for_bps(costs$small_business, rate_2022$small_business$preferred)
 
-  a_2015 <- compute_impacts_for_bps(costs$auto, rate_2015$auto_5yr$preferred)
-  a_2022 <- compute_impacts_for_bps(costs$auto, rate_2022$auto_5yr$preferred)
+  a_2015 <- compute_impacts_for_bps(costs$auto, rate_2015$auto$preferred)
+  a_2022 <- compute_impacts_for_bps(costs$auto, rate_2022$auto$preferred)
 
   mortgage_principal <- costs$mortgage$principal
   mortgage_sale_price <- round(mortgage_principal / 0.8, 0)

@@ -218,7 +218,7 @@ build_decomp_from_changes <- function(changes, baselines, calendar, config) {
     rows[[i]] <- data.frame(
       vintage_date = vd,
       since_date = since_date,
-      legislative_deficit_5yr_bn = value_horizon,
+      legislative_deficit_horizon_bn = value_horizon,
       legislative_deficit_window_bn = value_horizon,
       harmonized_years = paste(target_years, collapse = "-"),
       reported_window_label = sprintf("%d-%d", min(target_years), max(target_years)),

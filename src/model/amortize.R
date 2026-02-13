@@ -20,8 +20,8 @@ compute_household_costs <- function(fiscal, coefs) {
     # Get the pass-through name (matching convention)
     pt_name <- switch(loan_name,
       mortgage       = "mortgage_30yr",
-      auto           = "auto_5yr",
-      small_business = "small_business_5yr"
+      auto           = "auto",
+      small_business = "small_business"
     )
 
     pt <- passthrough[[pt_name]] %||% 1.0

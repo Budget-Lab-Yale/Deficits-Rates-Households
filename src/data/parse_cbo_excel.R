@@ -678,9 +678,9 @@ parse_legislative_decomposition <- function(config) {
     parsed <- parse_one_decomp(fpath, lookup, vintage_date, config)
 
     all_vintages[[vintage_key]] <- parsed
-    message(sprintf("    -> since %s, harmonized fiscal-policy 5yr: $%.1fB (reported window: $%.1fB)",
+    message(sprintf("    -> since %s, harmonized fiscal-policy horizon: $%.1fB (reported window: $%.1fB)",
                     format(parsed$since_date, "%b %Y"),
-                    parsed$legislative_deficit_5yr_bn,
+                    parsed$legislative_deficit_horizon_bn,
                     parsed$legislative_deficit_window_bn))
 
     deps <- rbind(deps, make_dependency_row(
@@ -741,23 +741,23 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
   target_end_year <- vintage_year + start_offset + horizon - 1
 
   # ---- 2. Find the reported cumulative total column ----
-  five_yr_col <- find_five_yr_col(raw, year_row, year_cols, years, target_end_year, horizon)
-  if (is.null(five_yr_col)) {
+  cumul_col <- find_cumulative_col(raw, year_row, year_cols, years, target_end_year, horizon)
+  if (is.null(cumul_col)) {
     stop(sprintf("Cannot find an unambiguous reported cumulative column (horizon=%d)", horizon))
   }
 
   # ---- 3. Find the legislative deficit total row ----
-  leg_row <- find_legislative_total_row(raw, year_row, nr, nc, five_yr_col)
+  leg_row <- find_legislative_total_row(raw, year_row, nr, nc, cumul_col)
   if (is.null(leg_row)) {
     stop("Cannot find legislative/fiscal-policy total row")
   }
 
   # ---- 4. Extract reported-window value and annual values ----
   raw_window_value <- suppressWarnings(
-    as.numeric(as.character(unlist(raw[leg_row, five_yr_col])))
+    as.numeric(as.character(unlist(raw[leg_row, cumul_col])))
   )
   if (is.na(raw_window_value)) {
-    stop(sprintf("Row %d, col %d has no numeric value", leg_row, five_yr_col))
+    stop(sprintf("Row %d, col %d has no numeric value", leg_row, cumul_col))
   }
 
   annual_raw <- suppressWarnings(
@@ -782,7 +782,7 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
   }
 
   # Harmonized fiscal-policy total is the exact sum over the configured horizon window.
-  value_5yr <- sum(annual_values[idx])
+  value_horizon <- sum(annual_values[idx])
 
   # ---- 5. Adjust for executive-action tariffs if flagged ----
   # Customs revenue is policy-driven in 2026 but classified by CBO as technical.
@@ -792,21 +792,21 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
       stop("include_technical_customs=TRUE but Customs duties row was not found")
     }
 
-    customs_window <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, five_yr_col]))))
+    customs_window <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, cumul_col]))))
     customs_annual <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, year_cols]))))
     if (is.na(customs_window) || any(is.na(customs_annual[idx]))) {
       stop("Failed to extract customs values for reported or harmonized window")
     }
-    customs_5yr <- sum(customs_annual[idx])
+    customs_horizon <- sum(customs_annual[idx])
 
     # Positive customs revenue lowers deficits, so subtract from deficit changes.
     window_value <- window_value - customs_window
-    value_5yr <- value_5yr - customs_5yr
+    value_horizon <- value_horizon - customs_horizon
     message(sprintf("    Customs adjustment applied: reported -$%.1fB, harmonized -$%.1fB",
-                    customs_window, customs_5yr))
+                    customs_window, customs_horizon))
   }
 
-  window_label <- trimws(as.character(raw[year_row, five_yr_col]))
+  window_label <- trimws(as.character(raw[year_row, cumul_col]))
   window_label <- gsub("[\r\n\t]+", " ", window_label)
   window_label <- gsub("\\s+", " ", window_label)
   window_label <- gsub("–|—", "-", window_label)
@@ -817,7 +817,7 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
   data.frame(
     vintage_date = vintage_date,
     since_date = as.Date(lookup$since),
-    legislative_deficit_5yr_bn = value_5yr,
+    legislative_deficit_horizon_bn = value_horizon,
     legislative_deficit_window_bn = window_value,
     harmonized_years = paste(target_years, collapse = "-"),
     reported_window_label = window_label,
@@ -828,7 +828,7 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
 }
 
 
-find_five_yr_col <- function(raw, year_row, year_cols, years, target_end_year, horizon = 5) {
+find_cumulative_col <- function(raw, year_row, year_cols, years, target_end_year, horizon = 10) {
   # Find the column containing the cumulative horizon total.
   nc <- ncol(raw)
   last_yr_col <- max(year_cols)
@@ -863,7 +863,7 @@ find_five_yr_col <- function(raw, year_row, year_cols, years, target_end_year, h
       }
     }
 
-    if (grepl("5.year|five.year|total|cumulative", tolower(val))) {
+    if (grepl("5.year|five.year|10.year|ten.year|total|cumulative", tolower(val))) {
       candidates <- c(candidates, c)
       scores <- c(scores, 0.5)
     }
@@ -880,7 +880,7 @@ find_five_yr_col <- function(raw, year_row, year_cols, years, target_end_year, h
 }
 
 
-find_legislative_total_row <- function(raw, year_row, nr, nc, five_yr_col) {
+find_legislative_total_row <- function(raw, year_row, nr, nc, cumul_col) {
   # Search for the row with the legislative deficit total.
   # Looks for text patterns containing "legislat" combined with
   # "total", "increase", "decrease", or "deficit".
@@ -901,8 +901,8 @@ find_legislative_total_row <- function(raw, year_row, nr, nc, five_yr_col) {
                         row_text)
     if (!is_summary) next
 
-    # Verify it has a numeric value in the 5-year column
-    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, five_yr_col]))))
+    # Verify it has a numeric value in the cumulative column
+    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, cumul_col]))))
     if (!is.na(val)) return(r)
   }
 
@@ -917,10 +917,10 @@ find_legislative_total_row <- function(raw, year_row, nr, nc, five_yr_col) {
     if (!grepl("total|increase|decrease|deficit", combined)) next
 
     # Try second row first (usually where the number is)
-    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r + 1, five_yr_col]))))
+    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r + 1, cumul_col]))))
     if (!is.na(val)) return(r + 1)
 
-    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, five_yr_col]))))
+    val <- suppressWarnings(as.numeric(as.character(unlist(raw[r, cumul_col]))))
     if (!is.na(val)) return(r)
   }
 

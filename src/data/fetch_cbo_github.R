@@ -5,7 +5,7 @@
 # components in billions of dollars.
 #
 # We extract projected "Debt Held by the Public" at the configured projection horizon
-# (default: 5 years ahead) for each vintage.
+# (configured projection horizon) for each vintage.
 
 library(dplyr)
 
