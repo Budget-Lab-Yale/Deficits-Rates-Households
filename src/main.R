@@ -46,7 +46,7 @@ message("=== Deficits, Rates, and Household Costs: Fiscal-Policy Decomposition T
 config <- read_config(config_path)
 coefs  <- read_coefficients()
 
-message(sprintf("Elasticity (preferred): %.1f bp/pp debt/GDP", coefs$elasticity$preferred))
+message(sprintf("Sensitivity (preferred): %.1f bp/pp debt/GDP", coefs$elasticity$preferred))
 message(sprintf("Projection horizon:     %d years", config$projection_horizon %||% 5))
 message(sprintf("CBO data source:        %s", config$cbo_data_source %||% "excel_legacy"))
 message(sprintf("Fetch CBO GitHub:       %s", ifelse(config$fetch$cbo_github, "enabled", "disabled")))

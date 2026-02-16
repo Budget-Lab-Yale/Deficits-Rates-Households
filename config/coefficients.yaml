@@ -25,19 +25,19 @@ passthrough:
 # See docs/passthrough_literature_review.md §4 for sourcing details
 loans:
   mortgage:
-    label: "30-year fixed mortgage"
+    label: "Home Mortgage (30 year)"
     principal: 329840     # FRED HOSMEDUSM052N Sep 2025 median $412,300 less 20% down
     term_months: 360
     baseline_rate_pct: 6.23
     source: "FRED HOSMEDUSM052N Sep 2025, Freddie Mac PMMS Nov 26 2025"
   auto:
-    label: "New auto loan"
+    label: "Auto Loan (5½ year)"
     principal: 42332      # Experian State of Auto Finance Q3 2025
     term_months: 67
     baseline_rate_pct: 7.51
     source: "Experian Q3 2025, FRED TERMCBAUTO48NS Q3 2025"
   small_business:
-    label: "Small business loan"
+    label: "Small Business Loan (5 year)"
     principal: 663000     # B2BReview/SBA 2024 (no 2025 update available)
     term_months: 60
     baseline_rate_pct: 7.00

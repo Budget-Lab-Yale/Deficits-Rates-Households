@@ -5,6 +5,8 @@
 library(ggplot2)
 library(dplyr)
 library(patchwork)
+library(flextable)
+library(officer)
 
 generate_all_output <- function(panel, fiscal, costs, costs_table,
                                  historical, config, output_dir) {
@@ -31,6 +33,7 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
     plot_legislative_delta(panel, config, output_dir)
     plot_cumulative_legislative(panel, config, output_dir)
     if (!is.null(historical) && nrow(historical) > 0) {
+      plot_cumulative_rate_effect(historical, config, output_dir)
       plot_historical_contributions(historical, config, output_dir)
     }
     plot_household_impacts(costs_table, config, output_dir)
@@ -42,7 +45,7 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
   generate_markdown_summary(fiscal, costs, costs_table, panel, config, output_dir)
 
   # ---- 6. Publication workbook ----
-  write_interest_cost_impacts_workbook(fiscal, costs, output_dir)
+  write_interest_cost_impacts_workbook(fiscal, costs, costs_table, output_dir)
 
   message(sprintf("  All output written to %s", output_dir))
 }
@@ -123,16 +126,25 @@ plot_cumulative_legislative <- function(panel, config, output_dir) {
 
   combined <- do.call(rbind, plot_data)
 
+  # Label the endpoint of each series
+  endpoints <- do.call(rbind, lapply(plot_data, function(d) tail(d, 1)))
+
   p <- ggplot(combined, aes(x = vintage_date, y = cumulative, color = scenario)) +
     geom_line(linewidth = 0.8) +
     geom_point(size = 2) +
     geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+    geom_text(
+      data = endpoints,
+      aes(label = sprintf("%+.1f pp", cumulative)),
+      hjust = -0.15, vjust = 0.4, size = 3.8, fontface = "bold", show.legend = FALSE
+    ) +
     scale_color_manual(values = c("Since 2015" = "#2166AC",
                                    "Since 2022" = "#E08214"),
                        name = NULL) +
+    scale_x_date(expand = expansion(mult = c(0.02, 0.12))) +
     labs(
       title = "Cumulative Legislative Contribution to Debt/GDP",
-      subtitle = "Chained CBO decomposition vintages",
+      subtitle = "Cumulative change in projected debt/GDP attributable to enacted legislation",
       x = "CBO projection vintage",
       y = "Cumulative legislative \u0394(debt/GDP) (pp)"
     ) +
@@ -148,6 +160,78 @@ plot_cumulative_legislative <- function(panel, config, output_dir) {
          height = config$chart_height %||% 6,
          dpi = config$chart_dpi %||% 300, bg = "white")
   message("  Saved cumulative_legislative.png")
+}
+
+
+plot_cumulative_rate_effect <- function(historical, config, output_dir) {
+  # Combined line chart: cumulative rate effect (bp) for all scenarios
+
+  scenarios <- config$scenarios
+  if (is.null(scenarios)) {
+    scenarios <- list(
+      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
+      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
+    )
+  }
+
+  plot_data <- list()
+
+  for (scenario_name in names(scenarios)) {
+    label <- scenarios[[scenario_name]]$label
+    start <- as.Date(scenarios[[scenario_name]]$start_vintage)
+    scen_data <- historical[historical$scenario == scenario_name, ]
+    if (nrow(scen_data) == 0) next
+
+    pts <- scen_data[, c("vintage_date", "cumulative_bp")]
+    pts$scenario <- label
+
+    # Anchor at 0 before the first vintage
+    prior <- historical$vintage_date[historical$vintage_date < start]
+    anchor_date <- if (length(prior) > 0) max(prior) else start
+    anchor <- data.frame(vintage_date = anchor_date, cumulative_bp = 0,
+                         scenario = label, stringsAsFactors = FALSE)
+    pts <- rbind(anchor, pts)
+    plot_data[[scenario_name]] <- pts
+  }
+
+  if (length(plot_data) == 0) return(invisible(NULL))
+
+  combined <- do.call(rbind, plot_data)
+
+  # Label the endpoint of each series
+  endpoints <- do.call(rbind, lapply(plot_data, function(d) tail(d, 1)))
+
+  p <- ggplot(combined, aes(x = vintage_date, y = cumulative_bp, color = scenario)) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2) +
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+    geom_text(
+      data = endpoints,
+      aes(label = sprintf("%+.0f bp", cumulative_bp)),
+      hjust = -0.15, vjust = 0.4, size = 3.8, fontface = "bold", show.legend = FALSE
+    ) +
+    scale_color_manual(values = c("Since 2015" = "#2166AC",
+                                   "Since 2022" = "#E08214"),
+                       name = NULL) +
+    scale_x_date(expand = expansion(mult = c(0.02, 0.12))) +
+    labs(
+      title = "Cumulative Legislative Contribution to Long-Term Treasury Rates",
+      subtitle = "Legislative effect on 10-year Treasury yields at 3 bp per pp of projected debt/GDP",
+      x = "CBO projection vintage",
+      y = "Cumulative rate effect (bp)"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position = "top"
+    )
+
+  ggsave(file.path(output_dir, "cumulative_rate_effect.png"), plot = p,
+         width = config$chart_width %||% 10,
+         height = config$chart_height %||% 6,
+         dpi = config$chart_dpi %||% 300, bg = "white")
+  message("  Saved cumulative_rate_effect.png")
 }
 
 
@@ -197,7 +281,7 @@ plot_historical_contributions <- function(historical, config, output_dir) {
       shared_x +
       labs(
         title = sprintf("Legislative Fiscal Contribution to Long-Term Rates (%s)", scen),
-        subtitle = "Per-vintage legislative \u0394(debt/GDP) \u00d7 3 bp/pp elasticity",
+        subtitle = "Per-vintage legislative \u0394(debt/GDP) \u00d7 3 bp/pp estimated sensitivity",
         x = NULL,
         y = "bp (per vintage)"
       ) +
@@ -242,26 +326,38 @@ plot_historical_contributions <- function(historical, config, output_dir) {
 
 plot_household_impacts <- function(costs_table, config, output_dir) {
   # Bar chart of annual cost impacts (preferred scenario only)
+  # with lifetime cost annotation above each bar
   pref <- costs_table[costs_table$scenario == "preferred", ]
+  pref$loan_type <- factor(pref$loan_type,
+                           levels = pref$loan_type[order(-abs(pref$annual_impact))])
 
-  p <- ggplot(pref, aes(x = reorder(loan_type, -abs(annual_impact)),
-                         y = annual_impact)) +
-    geom_col(fill = "#E08214", width = 0.6) +
-    geom_text(aes(label = sprintf("$%s", format_dollars(abs(annual_impact)))),
-              vjust = ifelse(pref$annual_impact >= 0, -0.5, 1.5),
-              size = 4) +
-    geom_hline(yintercept = 0, color = "grey30") +
-    labs(
-      title = "Annual Household Cost Impact of Legislative Fiscal Policy",
-      subtitle = "Cumulative legislative contribution (preferred elasticity: 3 bp/pp)",
-      x = NULL,
-      y = "Change in annual payment ($)"
+  p <- ggplot(pref, aes(x = loan_type, y = annual_impact)) +
+    geom_col(fill = "#2166AC", width = 0.55) +
+    geom_text(
+      aes(label = sprintf("$%s/yr", format_dollars(abs(annual_impact)))),
+      vjust = -3.0, size = 3.8, color = "grey40"
     ) +
-    theme_minimal(base_size = 12) +
+    geom_text(
+      aes(label = sprintf("$%s over life of loan", format_dollars(abs(lifetime_impact)))),
+      vjust = -1.3, size = 4.0, fontface = "bold", color = "grey20"
+    ) +
+    scale_y_continuous(
+      labels = function(x) sprintf("$%s", format_dollars(x)),
+      expand = expansion(mult = c(0, 0.35))
+    ) +
+    labs(
+      title = "Household Cost Impact of Legislative Fiscal Policy",
+      subtitle = "Cumulative legislative contribution since 2015 (preferred estimate: 3 bp/pp)",
+      x = NULL,
+      y = "Additional annual payment"
+    ) +
+    theme_minimal(base_size = 13) +
     theme(
-      plot.title = element_text(face = "bold"),
+      plot.title = element_text(face = "bold", size = 14),
+      plot.subtitle = element_text(color = "grey40", size = 10.5),
       panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank()
+      panel.grid.major.x = element_blank(),
+      axis.text.x = element_text(size = 11)
     )
 
   ggsave(file.path(output_dir, "household_impacts.png"), plot = p,
@@ -332,7 +428,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
 
   # Household costs (primary scenario)
   lines <- c(lines,
-    "## Household Cost Impacts (Preferred Elasticity: 3 bp/pp)",
+    "## Household Cost Impacts (Preferred Estimate: 3 bp/pp)",
     "",
     "| Loan Type | Principal | Rate Change | Annual Impact | Lifetime Impact |",
     "|-----------|-----------|-------------|--------------|----------------|"
@@ -356,8 +452,8 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
     "",
     "## Sensitivity",
     "",
-    "| Elasticity | Source | 10yr Effect | Mortgage Annual |",
-    "|-----------|--------|-------------|----------------|"
+    "| Estimated Sensitivity | Source | 10yr Effect | Mortgage Annual |",
+    "|----------------------|--------|-------------|----------------|"
   )
 
   for (scenario in c("low", "preferred", "high")) {
@@ -391,7 +487,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
     sprintf("2. Harmonizes each vintage to an exact %d-year window (%s through %s),", horizon, window_start, window_end),
     "   then divides by projected GDP to get fiscal-policy delta(debt/GDP) in pp",
     "3. Chains these across consecutive CBO vintages into cumulative series",
-    "4. Multiplies by the published elasticity (3 bp per pp, range 2-4)",
+    "4. Multiplies by the estimated sensitivity (3 bp per pp, range 2-4)",
     "5. Decomposes into term premium (~75%) and expected short rate (~25%) channels",
     "6. Applies pass-through rates to consumer loan rates",
     "7. Translates into dollar cost impacts via standard amortization",
@@ -465,20 +561,20 @@ build_interest_cost_table_rows <- function(fiscal, costs) {
 
   rows <- data.frame(
     label = c(
-      "Thirty-year home mortgage",
+      costs$mortgage$label,
       "Median sale price (Q3 2025)",
       "Less 20% down",
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
       "Cumulative lifetime cost effect",
       "",
-      "Small business loan",
+      costs$small_business$label,
       "Average loan balance (2024)",
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
       "Cumulative lifetime cost effect",
       "",
-      "Auto loan",
+      costs$auto$label,
       "Average new auto loan principal (Q3 2025)",
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
@@ -522,75 +618,223 @@ build_interest_cost_table_rows <- function(fiscal, costs) {
 }
 
 
-write_interest_cost_impacts_workbook <- function(fiscal, costs, output_dir) {
+write_interest_cost_impacts_workbook <- function(fiscal, costs, costs_table, output_dir) {
   rows <- build_interest_cost_table_rows(fiscal, costs)
-  output_path <- file.path(output_dir, "interest_cost_impacts_table.xlsx")
-  if (!requireNamespace("openxlsx", quietly = TRUE)) {
-    stop("Package 'openxlsx' is required to write interest_cost_impacts_table.xlsx")
+  output_path <- file.path(output_dir, "interest_cost_impacts_table.docx")
+
+  if (!requireNamespace("flextable", quietly = TRUE)) {
+    stop("Package 'flextable' is required to write interest_cost_impacts_table.docx")
   }
 
-  write_interest_cost_impacts_workbook_r(rows, output_path)
-  message(sprintf("  Saved %s (R/openxlsx)", basename(output_path)))
+  ft_costs <- build_costs_flextable(rows)
+  ft_sensitivity <- build_sensitivity_flextable(fiscal, costs, costs_table)
+
+  # Write both tables to a single docx
+  doc <- officer::read_docx()
+  doc <- officer::body_add_par(doc, "Cumulative Interest Cost Impacts of Fiscal Policy",
+                               style = "heading 2")
+  doc <- flextable::body_add_flextable(doc, ft_costs)
+  doc <- officer::body_add_par(doc, "")
+  doc <- officer::body_add_par(doc, "Sensitivity", style = "heading 2")
+  doc <- flextable::body_add_flextable(doc, ft_sensitivity)
+  print(doc, target = output_path)
+
+  message(sprintf("  Saved %s", basename(output_path)))
 }
 
 
-write_interest_cost_impacts_workbook_r <- function(rows, output_path) {
-  wb <- openxlsx::createWorkbook()
-  openxlsx::addWorksheet(wb, "Interest Cost Impacts")
+# Shared table styling helpers
+style_tbl_footer <- function(ft) {
+  ft <- flextable::fontsize(ft, size = 8, part = "footer")
+  ft <- flextable::color(ft, color = "#666666", part = "footer")
+  ft
+}
 
-  title_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 12, textDecoration = "bold", halign = "left")
-  subtitle_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "left")
-  header_style <- openxlsx::createStyle(
-    fontName = "Calibri", fontSize = 10, textDecoration = "bold",
-    halign = "center", valign = "center", fgFill = "#F2F2F2",
-    border = c("top", "bottom"), borderColour = "#D9D9D9"
+tbl_attribution <- "Table: The Budget Lab | Source: NAR, Experian, B2BReview/SBA, Freddie Mac, FRED, The Budget Lab analysis"
+
+
+build_costs_flextable <- function(rows) {
+  # Build display data.frame (drop blank/spacer rows)
+  display <- rows[rows$row_type != "blank", ]
+
+  fmt_val <- function(val, row_type) {
+    if (is.na(val)) return("")
+    if (row_type == "rate") return(sprintf("%.2f", val))
+    paste0("$", formatC(round(val), format = "f", digits = 0, big.mark = ","))
+  }
+
+  display$col_2015 <- mapply(fmt_val, display$since_2015, display$row_type)
+  display$col_2022 <- mapply(fmt_val, display$since_2022, display$row_type)
+
+  # Clear values for section headers
+  display$col_2015[display$row_type == "section_header"] <- ""
+  display$col_2022[display$row_type == "section_header"] <- ""
+
+  # Indent detail rows
+  display$label[display$row_type != "section_header"] <-
+    paste0("  ", display$label[display$row_type != "section_header"])
+
+  tbl_data <- data.frame(
+    label = display$label,
+    since_2015 = display$col_2015,
+    since_2022 = display$col_2022,
+    stringsAsFactors = FALSE
   )
-  label_header_style <- openxlsx::createStyle(
-    fontName = "Calibri", fontSize = 10, textDecoration = "bold",
-    halign = "left", valign = "center", fgFill = "#F2F2F2",
-    border = c("top", "bottom"), borderColour = "#D9D9D9"
+
+  ft <- flextable::flextable(tbl_data)
+
+  ft <- flextable::set_header_labels(ft,
+    label = "",
+    since_2015 = "Cumulative since 2015",
+    since_2022 = "Cumulative since 2022"
   )
-  label_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "left", valign = "center")
-  section_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, textDecoration = "bold", halign = "left", valign = "center")
-  num_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "right", numFmt = "#,##0")
-  rate_style <- openxlsx::createStyle(fontName = "Calibri", fontSize = 10, halign = "right", numFmt = "0.00")
 
-  openxlsx::writeData(wb, 1, x = "Interest Cost Impacts of Cumulative Fiscal Policy", startCol = 1, startRow = 1, colNames = FALSE)
-  openxlsx::mergeCells(wb, 1, cols = 1:3, rows = 1)
-  openxlsx::addStyle(wb, 1, title_style, rows = 1, cols = 1, gridExpand = FALSE)
+  # Typography
+  ft <- flextable::font(ft, fontname = "Calibri", part = "all")
+  ft <- flextable::fontsize(ft, size = 10, part = "all")
 
-  openxlsx::writeData(wb, 1, x = "Costs expressed in current dollars at annual rates", startCol = 1, startRow = 2, colNames = FALSE)
-  openxlsx::mergeCells(wb, 1, cols = 1:3, rows = 2)
-  openxlsx::addStyle(wb, 1, subtitle_style, rows = 2, cols = 1, gridExpand = FALSE)
+  # Header styling
+  ft <- flextable::bold(ft, part = "header")
+  ft <- flextable::align(ft, j = 2:3, align = "center", part = "all")
+  ft <- flextable::bg(ft, bg = "#F2F2F2", part = "header")
 
-  openxlsx::writeData(wb, 1, x = "Cumulative\nsince 2015", startCol = 2, startRow = 4, colNames = FALSE)
-  openxlsx::writeData(wb, 1, x = "Cumulative\nsince 2022", startCol = 3, startRow = 4, colNames = FALSE)
-  openxlsx::addStyle(wb, 1, label_header_style, rows = 4, cols = 1, gridExpand = FALSE)
-  openxlsx::addStyle(wb, 1, header_style, rows = 4, cols = 2:3, gridExpand = TRUE)
+  # Section headers: bold
+  section_rows <- which(display$row_type == "section_header")
+  if (length(section_rows) > 0) {
+    ft <- flextable::bold(ft, i = section_rows, j = 1)
+  }
 
-  out_rows <- rows[, c("label", "since_2015", "since_2022")]
-  openxlsx::writeData(wb, 1, out_rows, startCol = 1, startRow = 5, colNames = FALSE, keepNA = FALSE)
+  # Cost rows: bold
+  cost_rows <- which(display$row_type == "cost")
+  if (length(cost_rows) > 0) {
+    ft <- flextable::bold(ft, i = cost_rows)
+  }
 
-  data_row_start <- 5
-  for (i in seq_len(nrow(rows))) {
-    r <- data_row_start + i - 1
-    row_type <- rows$row_type[i]
+  # Borders
+  thin_border <- officer::fp_border(color = "#999999", width = 0.5)
+  thick_border <- officer::fp_border(color = "#333333", width = 1.0)
+  no_border <- officer::fp_border(color = "transparent", width = 0)
 
-    if (identical(row_type, "section_header")) {
-      openxlsx::addStyle(wb, 1, section_style, rows = r, cols = 1, gridExpand = FALSE, stack = TRUE)
-    } else {
-      openxlsx::addStyle(wb, 1, label_style, rows = r, cols = 1, gridExpand = FALSE, stack = TRUE)
-    }
+  ft <- flextable::hline_top(ft, border = thick_border, part = "header")
+  ft <- flextable::hline_bottom(ft, border = thin_border, part = "header")
+  ft <- flextable::hline_bottom(ft, border = thick_border, part = "body")
 
-    if (identical(row_type, "rate")) {
-      openxlsx::addStyle(wb, 1, rate_style, rows = r, cols = 2:3, gridExpand = TRUE, stack = TRUE)
-    } else {
-      openxlsx::addStyle(wb, 1, num_style, rows = r, cols = 2:3, gridExpand = TRUE, stack = TRUE)
+  for (sr in section_rows) {
+    if (sr > 1) {
+      ft <- flextable::hline(ft, i = sr - 1, border = thin_border)
     }
   }
 
-  openxlsx::setColWidths(wb, 1, cols = 1, widths = 52)
-  openxlsx::setColWidths(wb, 1, cols = 2:3, widths = 22)
-  openxlsx::freezePane(wb, 1, firstActiveRow = 5, firstActiveCol = 1)
-  openxlsx::saveWorkbook(wb, output_path, overwrite = TRUE)
+  ft <- flextable::border(ft, border.left = no_border, border.right = no_border,
+                          part = "all")
+
+  # Column widths
+  ft <- flextable::width(ft, j = 1, width = 3.5)
+  ft <- flextable::width(ft, j = 2:3, width = 1.5)
+
+  # Padding
+  ft <- flextable::padding(ft, padding.top = 2, padding.bottom = 2, part = "body")
+
+  # Footer
+  note <- paste0(
+    "Rate effects computed as cumulative legislative change in projected debt-to-GDP ",
+    "multiplied by 3 basis points per percentage point (Plante, Richter & Zubairy 2025), ",
+    "scaled by product-specific pass-through coefficients. ",
+    "Mortgage pass-through: 100%. Auto: 50%. Small business: 25%. ",
+    "All loan parameters as of late November 2025."
+  )
+  ft <- flextable::add_footer_lines(ft, values = note)
+  ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
+  ft <- style_tbl_footer(ft)
+
+  ft
+}
+
+
+build_sensitivity_flextable <- function(fiscal, costs, costs_table) {
+  primary <- fiscal[["since_2015"]] %||% fiscal[[1]]
+  mortgage_label <- if (!is.null(costs$mortgage)) costs$mortgage$label else costs[[1]]$label
+
+  fmt_d <- function(x) paste0("$", formatC(round(x), format = "f", digits = 0, big.mark = ","))
+
+  sens_rows <- list()
+  for (scenario in c("low", "preferred", "high")) {
+    el <- primary$elasticity[[scenario]]
+    re <- primary$rate_effect[[scenario]]
+    mortgage <- costs_table[costs_table$scenario == scenario &
+                            costs_table$loan_type == mortgage_label, ]
+    ma <- if (nrow(mortgage) > 0) round(mortgage$annual_impact[1], 0) else NA
+    ml <- if (nrow(mortgage) > 0) round(mortgage$lifetime_impact[1], 0) else NA
+    src <- switch(scenario,
+      low = "Neveu & Schafer (2024)",
+      preferred = "Plante, Richter & Zubairy (2025)",
+      high = "Upper bound from Laubach (2009)"
+    )
+    sens_rows[[length(sens_rows) + 1]] <- data.frame(
+      sensitivity = sprintf("%.0f bp/pp", el),
+      source = src,
+      treasury_effect = sprintf("%+.0f bp", re),
+      annual_mortgage = if (!is.na(ma)) paste0(fmt_d(ma), "/yr") else "N/A",
+      lifetime_mortgage = if (!is.na(ml)) fmt_d(ml) else "N/A",
+      stringsAsFactors = FALSE
+    )
+  }
+
+  sens_data <- do.call(rbind, sens_rows)
+
+  ft <- flextable::flextable(sens_data)
+
+  ft <- flextable::set_header_labels(ft,
+    sensitivity = "Estimated\nSensitivity",
+    source = "Source",
+    treasury_effect = "Long-Term Treasury\nRate Effect",
+    annual_mortgage = "Annual Mortgage\nCost",
+    lifetime_mortgage = "Lifetime Mortgage\nCost"
+  )
+
+  # Typography
+  ft <- flextable::font(ft, fontname = "Calibri", part = "all")
+  ft <- flextable::fontsize(ft, size = 10, part = "all")
+
+  # Header
+  ft <- flextable::bold(ft, part = "header")
+  ft <- flextable::bg(ft, bg = "#F2F2F2", part = "header")
+  ft <- flextable::align(ft, j = 1, align = "center", part = "all")
+  ft <- flextable::align(ft, j = 3:5, align = "center", part = "all")
+
+  # Bold the preferred row
+  ft <- flextable::bold(ft, i = 2)
+
+  # Borders
+  thin_border <- officer::fp_border(color = "#999999", width = 0.5)
+  thick_border <- officer::fp_border(color = "#333333", width = 1.0)
+  no_border <- officer::fp_border(color = "transparent", width = 0)
+
+  ft <- flextable::hline_top(ft, border = thick_border, part = "header")
+  ft <- flextable::hline_bottom(ft, border = thin_border, part = "header")
+  ft <- flextable::hline_bottom(ft, border = thick_border, part = "body")
+  ft <- flextable::border(ft, border.left = no_border, border.right = no_border,
+                          part = "all")
+
+  # Column widths
+  ft <- flextable::width(ft, j = 1, width = 1.0)
+  ft <- flextable::width(ft, j = 2, width = 2.2)
+  ft <- flextable::width(ft, j = 3, width = 1.2)
+  ft <- flextable::width(ft, j = 4, width = 1.2)
+  ft <- flextable::width(ft, j = 5, width = 1.2)
+
+  # Padding
+  ft <- flextable::padding(ft, padding.top = 2, padding.bottom = 2, part = "body")
+
+  # Footer
+  ft <- flextable::add_footer_lines(ft,
+    values = paste0(
+      "Based on cumulative legislative debt impacts since 2015. Preferred estimate bolded. ",
+      "The 2 and 4 bp/pp estimates are from regressions of the 5-year-ahead 5-year Treasury rate ",
+      "on CBO 5-year debt/GDP forecasts; the preferred 3 bp/pp uses the 10-year Treasury and ",
+      "10-year forecasts (Plante, Richter & Zubairy 2025)."))
+  ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
+  ft <- style_tbl_footer(ft)
+
+  ft
 }
