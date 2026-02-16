@@ -619,10 +619,12 @@ DECOMP_LOOKUP <- list(
   "2024-06" = list(sheet = "Table 3-1",     since = "2024-02-01", negate = FALSE),
   "2025-01" = list(sheet = "Table A-1",     since = "2024-06-01", negate = FALSE),
   "2026-02" = list(sheet = "Table 5-1",     since = "2025-01-01", negate = FALSE,
-                   # Executive-action tariffs: CBO classified customs revenue from
-                   # 2025 tariffs as "technical changes" since they weren't legislation.
-                   # We include them as policy-driven fiscal actions.
-                   include_technical_customs = TRUE)
+                   # Executive-action tariffs: CBO classified customs revenue effects
+                   # as "technical changes" (tariff rate → revenue gain) and "economic
+                   # changes" (reduced import volumes → revenue loss). Both are
+                   # policy-driven; we reclassify them into the fiscal-policy total.
+                   include_technical_customs = TRUE,
+                   include_economic_customs = TRUE)
 )
 
 
@@ -802,8 +804,32 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
     # Positive customs revenue lowers deficits, so subtract from deficit changes.
     window_value <- window_value - customs_window
     value_horizon <- value_horizon - customs_horizon
-    message(sprintf("    Customs adjustment applied: reported -$%.1fB, harmonized -$%.1fB",
+    message(sprintf("    Technical customs adjustment: reported -$%.1fB, harmonized -$%.1fB",
                     customs_window, customs_horizon))
+  }
+
+  # ---- 5b. Adjust for economic customs (import volume loss) if flagged ----
+  # CBO's economic changes include a customs-duty revenue *loss* from reduced
+  # import volumes caused by tariffs. This is also policy-driven.
+  if (isTRUE(lookup$include_economic_customs)) {
+    econ_customs_row <- find_economic_customs_row(raw, year_row, leg_row, nr, nc)
+    if (is.null(econ_customs_row)) {
+      stop("include_economic_customs=TRUE but economic Customs duties row was not found")
+    }
+
+    econ_customs_window <- suppressWarnings(as.numeric(as.character(unlist(raw[econ_customs_row, cumul_col]))))
+    econ_customs_annual <- suppressWarnings(as.numeric(as.character(unlist(raw[econ_customs_row, year_cols]))))
+    if (is.na(econ_customs_window) || any(is.na(econ_customs_annual[idx]))) {
+      stop("Failed to extract economic customs values for reported or harmonized window")
+    }
+    econ_customs_horizon <- sum(econ_customs_annual[idx])
+
+    # Economic customs values are negative (revenue loss) — subtracting a negative
+    # adds to the deficit, which is the correct direction.
+    window_value <- window_value - econ_customs_window
+    value_horizon <- value_horizon - econ_customs_horizon
+    message(sprintf("    Economic customs adjustment: reported -$%.1fB, harmonized -$%.1fB",
+                    econ_customs_window, econ_customs_horizon))
   }
 
   window_label <- trimws(as.character(raw[year_row, cumul_col]))
@@ -949,6 +975,38 @@ find_technical_customs_row <- function(raw, year_row, leg_row, nr, nc) {
 
   # Now find "Customs duties" in the technical section
   for (r in tech_start:min(nr, tech_start + 40)) {
+    row_text <- tolower(paste(as.character(unlist(raw[r, label_cols])), collapse = " "))
+    row_text <- gsub("\\bna\\b", "", row_text)
+    row_text <- gsub("\\s+", " ", trimws(row_text))
+    if (grepl("customs dut", row_text)) {
+      return(r)
+    }
+  }
+
+  NULL
+}
+
+
+find_economic_customs_row <- function(raw, year_row, leg_row, nr, nc) {
+  # Find "Customs duties" in the economic changes section
+  # (between the legislative total and the economic total). Returns row index or NULL.
+
+  label_cols <- 1:min(8, nc)
+
+  # Find the economic changes total row (same pattern as in find_technical_customs_row)
+  econ_total <- NULL
+  for (r in (leg_row + 1):min(nr, leg_row + 80)) {
+    row_text <- tolower(paste(as.character(unlist(raw[r, label_cols])), collapse = " "))
+    row_text <- gsub("\\bna\\b", "", row_text)
+    if (grepl("deficit.*economic changes|economic changes.*deficit", row_text)) {
+      econ_total <- r
+      break
+    }
+  }
+  if (is.null(econ_total)) return(NULL)
+
+  # Search between the legislative total and the economic total for "Customs duties"
+  for (r in (leg_row + 1):(econ_total - 1)) {
     row_text <- tolower(paste(as.character(unlist(raw[r, label_cols])), collapse = " "))
     row_text <- gsub("\\bna\\b", "", row_text)
     row_text <- gsub("\\s+", " ", trimws(row_text))
