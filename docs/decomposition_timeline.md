@@ -1,16 +1,24 @@
 # CBO Budget Projections: Fiscal-Policy Decomposition Timeline
 
-This reference documents the 20 CBO Budget Projections vintages used in the
+> **Note:** This document is a technical reference for the CBO Budget Projections
+> Excel files used in the legacy Excel parser and for the latest-vintage Excel
+> append. The production pipeline uses CBO eval-projections CSVs
+> (`baseline_changes.csv`) as its primary data source; this reference supports
+> auditability and the Excel append pathway.
+
+This reference documents the CBO Budget Projections vintages used in the
 fiscal-policy decomposition pipeline, the specific parsing choices made for each,
 and known concerns.
 
 ## Overview
 
 - **43 total Budget Projections files** (2007-01 to 2026-02)
-- **20 vintages used** (2015-08 to 2026-02) -- continuous chain
-- **2 vintages skipped** in the 2015+ range: 2019-05, 2023-05 (no legislative data)
+- **22 vintages in CSV-primary mode** (2015-08 to 2026-02) -- continuous chain including
+  zero-legislation vintages May 2019 and May 2023
+- **20 vintages in Excel-legacy mode** -- same range, skipping May 2019 and May 2023
+  (no legislative data in their Excel files)
 - **All pre-2015 vintages excluded** -- inconsistent formats, large gaps, no GDP denominator
-- **GDP denominator:** CBO Economic Projections Excel files (23 files, 2014-08 to 2026-02)
+- **GDP denominator:** CBO Economic Projections (CSV or Excel by mode)
 
 ## Parser Approach
 
@@ -29,7 +37,7 @@ sign conventions. A universal regex-based parser proved fragile across these era
 
 All values verified against raw Excel files (spot-checked Feb 2026).
 
-| Vintage | Sheet Used | Since Date | Raw 5yr ($B) | Negate | Normalized ($B) | Notes |
+| Vintage | Sheet Used | Since Date | Raw Reported ($B) | Negate | Normalized ($B) | Notes |
 |---------|-----------|------------|-------------:|--------|----------------:|-------|
 | 2015-08 | `8. Table A-1` | Mar 2015 | -76.0 | Yes | **+76.0** | Rev/outlay primary axis; "Total Legislative Changes" in Memorandum |
 | 2016-01 | `18. Table A-1` | Aug 2015 | -486.6 | Yes | **+486.6** | Omnibus spending, tax extenders (Dec 2015) |
@@ -52,8 +60,8 @@ All values verified against raw Excel files (spot-checked Feb 2026).
 | 2025-01 | `Table A-1` | Jun 2024 | +124.6 | No | **+124.6** | Continuing resolutions, minor legislation |
 | 2026-02 | `Table 5-1` | Jan 2025 | +2285.3 | No | **+2285.3** | **2025 Reconciliation Act** (TCJA extension + tax/spending changes) |
 
-Note: The production metric now uses harmonized annual sums over exact years
-`t+1` through `t+5`, not these reported-window totals.
+Note: The production metric uses harmonized annual sums over exact years
+`t` through `t+9`, not these reported-window totals.
 
 ## Skipped Vintages (2015+ Range)
 
@@ -95,13 +103,13 @@ sheet to use and why:
 
 ### 1. Potential Double-Counting via Overlapping Windows
 
-Each vintage's 5-year legislative total covers a **different 5-year window** (e.g.,
-2018-04 covers FY2018-2022, while 2019-01 covers FY2019-2023). When we chain
+Each vintage's 10-year legislative total covers a **different 10-year window** (e.g.,
+2018-04 covers FY2018-2027, while 2019-01 covers FY2019-2028). When we chain
 (sum) these incremental values, a single piece of legislation may contribute to
-multiple vintages' 5-year totals.
+multiple vintages' totals.
 
 However, this is **not double-counting** in the strict sense. Each vintage reports
-only the *change* in the 5-year legislative deficit relative to the immediately
+only the *change* in the 10-year legislative deficit relative to the immediately
 preceding baseline. If the TCJA was already in the 2018-04 baseline, the 2019-01
 vintage's legislative component only captures *new* legislation enacted between
 April 2018 and January 2019 (e.g., revised scoring, new laws). The CBO explicitly
@@ -115,9 +123,9 @@ legislative changes" in some vintages but not all.
 
 ### 2. Variable Window Lengths
 
-Not all reported totals cover exactly 5 fiscal years. Some vintages (especially
-2020-2021 era) use a 6-year window. The parser now harmonizes each vintage by
-summing annual values for exact years `t+1..t+5`.
+Not all reported totals cover the same number of fiscal years. Some vintages
+(especially 2020-2021 era) use a 6-year window. The parser harmonizes each
+vintage by summing annual values for exact years `t..t+9`.
 
 ### 3. GDP Denominator Matching
 
