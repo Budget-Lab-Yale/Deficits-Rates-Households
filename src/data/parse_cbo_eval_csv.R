@@ -237,11 +237,8 @@ build_decomp_from_changes <- function(changes, baselines, calendar, config) {
 load_gdp_vintages <- function(config) {
   gdp_path <- resolve_path(config$cbo_gdp_vintage_csv)
   if (!file.exists(gdp_path)) {
-    gdp_path <- find_latest_archived_gdp_table(config)
-  }
-
-  if (!file.exists(gdp_path)) {
-    stop("No GDP vintage table found (cbo_gdp_vintage_csv or archived fallback)")
+    message(sprintf("  GDP vintage CSV not found at %s — generating from Economic Projections Excel files...", gdp_path))
+    generate_gdp_vintage_csv(config, gdp_path)
   }
 
   gdp <- read.csv(gdp_path, stringsAsFactors = FALSE)
@@ -283,17 +280,11 @@ load_gdp_vintages <- function(config) {
 }
 
 
-find_latest_archived_gdp_table <- function(config) {
-  root <- resolve_path(config$data_root)
-  iface <- config$interface %||% "Deficits-Rates-Households"
-  ver <- config$version %||% "v1"
-
-  cand <- Sys.glob(file.path(root, iface, ver, "*", "cbo_excel_gdp.csv"))
-  if (length(cand) == 0) return(NA_character_)
-
-  vint <- basename(dirname(cand))
-  idx <- order(vint, decreasing = TRUE)
-  cand[idx][1]
+generate_gdp_vintage_csv <- function(config, output_path) {
+  result <- parse_econ_projections_dir(config)
+  write.csv(result$vintages, output_path, row.names = FALSE)
+  message(sprintf("  Wrote %d vintage-year rows to %s",
+                  nrow(result$vintages), output_path))
 }
 
 

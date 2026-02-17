@@ -35,7 +35,7 @@ cbo_eval_baselines_csv: "../Data/CBO Reports/Projections Evaluation Data/baselin
 cbo_eval_changes_csv: "../Data/CBO Reports/Projections Evaluation Data/baseline_changes.csv"
 
 # Existing GDP-vintage table used for denominator matching in the 2015+ sample.
-# If missing, pipeline falls back to latest archived cbo_excel_gdp.csv under data_root.
+# If missing, auto-generated from Economic Projections Excel files in cbo_econ_dir.
 cbo_gdp_vintage_csv: "../Data/CBO Reports/Projections Evaluation Data/cbo_gdp_vintages.csv"
 
 # CSV sample and latest Excel append
