@@ -16,3 +16,9 @@ Thumbs.db
 
 # Temporary files
 *.tmp
+
+# CBO Excel source files (populate locally; see README)
+/input/budget_projections/*.xls
+/input/budget_projections/*.xlsx
+/input/economic_projections/*.xls
+/input/economic_projections/*.xlsx

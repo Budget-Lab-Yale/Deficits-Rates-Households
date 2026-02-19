@@ -30,13 +30,13 @@ cbo_github_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/
 cbo_gdp_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/actual_GDP.csv"
 
 # CSV-primary inputs (relative to repo root)
-cbo_eval_dir: "../Data/CBO Reports/Projections Evaluation Data"
-cbo_eval_baselines_csv: "../Data/CBO Reports/Projections Evaluation Data/baselines.csv"
-cbo_eval_changes_csv: "../Data/CBO Reports/Projections Evaluation Data/baseline_changes.csv"
+cbo_eval_dir: "input/eval_csv"
+cbo_eval_baselines_csv: "input/eval_csv/baselines.csv"
+cbo_eval_changes_csv: "input/eval_csv/baseline_changes.csv"
 
 # Existing GDP-vintage table used for denominator matching in the 2015+ sample.
 # If missing, auto-generated from Economic Projections Excel files in cbo_econ_dir.
-cbo_gdp_vintage_csv: "../Data/CBO Reports/Projections Evaluation Data/cbo_gdp_vintages.csv"
+cbo_gdp_vintage_csv: "input/eval_csv/cbo_gdp_vintages.csv"
 
 # CSV sample and latest Excel append
 csv_sample_start_vintage: "2015-08-01"
@@ -44,8 +44,8 @@ append_latest_excel: true
 latest_excel_append_vintage: "2026-02-01"
 
 # Local CBO Excel files (relative to repo root)
-cbo_budget_dir: "../Data/CBO Reports/Budget Projections"
-cbo_econ_dir: "../Data/CBO Reports/Economic Projections"
+cbo_budget_dir: "input/budget_projections"
+cbo_econ_dir: "input/economic_projections"
 
 # Data storage root (relative to repo root)
 data_root: "../Data"
