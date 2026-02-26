@@ -216,7 +216,7 @@ plot_cumulative_rate_effect <- function(historical, config, output_dir) {
     scale_x_date(expand = expansion(mult = c(0.02, 0.12))) +
     labs(
       title = "Cumulative Legislative Contribution to Long-Term Treasury Rates",
-      subtitle = "Legislative effect on 10-year Treasury yields at 3 bp per pp of projected debt/GDP",
+      subtitle = "Legislative effect on 10-year Treasury yields at 2 bp per pp of projected debt/GDP",
       x = "CBO projection vintage",
       y = "Cumulative rate effect (bp)"
     ) +
@@ -281,7 +281,7 @@ plot_historical_contributions <- function(historical, config, output_dir) {
       shared_x +
       labs(
         title = sprintf("Legislative Fiscal Contribution to Long-Term Rates (%s)", scen),
-        subtitle = "Per-vintage legislative \u0394(debt/GDP) \u00d7 3 bp/pp estimated sensitivity",
+        subtitle = "Per-vintage legislative \u0394(debt/GDP) \u00d7 2 bp/pp estimated sensitivity",
         x = NULL,
         y = "bp (per vintage)"
       ) +
@@ -347,7 +347,7 @@ plot_household_impacts <- function(costs_table, config, output_dir) {
     ) +
     labs(
       title = "Household Cost Impact of Legislative Fiscal Policy",
-      subtitle = "Cumulative legislative contribution since 2015 (preferred estimate: 3 bp/pp)",
+      subtitle = "Cumulative legislative contribution since 2015 (preferred estimate: 2 bp/pp)",
       x = NULL,
       y = "Additional annual payment"
     ) +
@@ -428,7 +428,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
 
   # Household costs (primary scenario)
   lines <- c(lines,
-    "## Household Cost Impacts (Preferred Estimate: 3 bp/pp)",
+    "## Household Cost Impacts (Preferred Estimate: 2 bp/pp)",
     "",
     "| Loan Type | Principal | Rate Change | Annual Impact | Lifetime Impact |",
     "|-----------|-----------|-------------|--------------|----------------|"
@@ -464,11 +464,11 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
                             costs_table$loan_type == mortgage_label, ]
     ma <- if (nrow(mortgage) > 0) mortgage$annual_impact[1] else NA
     src <- switch(scenario,
-      low = "Neveu & Schafer (2024)",
-      preferred = "Plante et al. (2025)",
-      high = "Upper bound"
+      low = "Furceri et al. (2025)",
+      preferred = "Neveu & Schafer (2024)",
+      high = "Plante et al. (2025)"
     )
-    lines <- c(lines, sprintf("| %.0f bp/pp | %s | %+.0f bp | $%s/yr |",
+    lines <- c(lines, sprintf("| %g bp/pp | %s | %+.0f bp | $%s/yr |",
                               el, src, re,
                               if (!is.na(ma)) format_dollars(ma) else "N/A"))
   }
@@ -487,7 +487,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
     sprintf("2. Harmonizes each vintage to an exact %d-year window (%s through %s),", horizon, window_start, window_end),
     "   then divides by projected GDP to get fiscal-policy delta(debt/GDP) in pp",
     "3. Chains these across consecutive CBO vintages into cumulative series",
-    "4. Multiplies by the estimated sensitivity (3 bp per pp, range 2-4)",
+    "4. Multiplies by the estimated sensitivity (2 bp per pp, range 1.5-3)",
     "5. Decomposes into term premium (~75%) and expected short rate (~25%) channels",
     "6. Applies pass-through rates to consumer loan rates",
     "7. Translates into dollar cost impacts via standard amortization",
@@ -738,7 +738,7 @@ build_costs_flextable <- function(rows) {
   # Footer
   note <- paste0(
     "Rate effects computed as cumulative legislative change in projected debt-to-GDP ",
-    "multiplied by 3 basis points per percentage point (Plante, Richter & Zubairy 2025), ",
+    "multiplied by 2 basis points per percentage point (Neveu & Schafer 2024), ",
     "scaled by product-specific pass-through coefficients. ",
     "Mortgage pass-through: 100%. Auto: 50%. Small business: 25%. ",
     "All loan parameters as of late November 2025."
@@ -766,12 +766,12 @@ build_sensitivity_flextable <- function(fiscal, costs, costs_table) {
     ma <- if (nrow(mortgage) > 0) round(mortgage$annual_impact[1], 0) else NA
     ml <- if (nrow(mortgage) > 0) round(mortgage$lifetime_impact[1], 0) else NA
     src <- switch(scenario,
-      low = "Neveu & Schafer (2024)",
-      preferred = "Plante, Richter & Zubairy (2025)",
-      high = "Upper bound from Laubach (2009)"
+      low = "Furceri et al. (2025)",
+      preferred = "Neveu & Schafer (2024)",
+      high = "Plante et al. (2025)"
     )
     sens_rows[[length(sens_rows) + 1]] <- data.frame(
-      sensitivity = sprintf("%.0f bp/pp", el),
+      sensitivity = sprintf("%g bp/pp", el),
       source = src,
       treasury_effect = sprintf("%+.0f bp", re),
       annual_mortgage = if (!is.na(ma)) paste0(fmt_d(ma), "/yr") else "N/A",
@@ -830,9 +830,9 @@ build_sensitivity_flextable <- function(fiscal, costs, costs_table) {
   ft <- flextable::add_footer_lines(ft,
     values = paste0(
       "Based on cumulative legislative debt impacts since 2015. Preferred estimate bolded. ",
-      "The 2 and 4 bp/pp estimates are from regressions of the 5-year-ahead 5-year Treasury rate ",
-      "on CBO 5-year debt/GDP forecasts; the preferred 3 bp/pp uses the 10-year Treasury and ",
-      "10-year forecasts (Plante, Richter & Zubairy 2025)."))
+      "1.5 bp/pp from Furceri, Goncalves & Li (2025, IMF WP 25/142, Table 2 fully-controlled); ",
+      "2 bp/pp from Neveu & Schafer (2024, CBO WP 2024-05); ",
+      "3 bp/pp from Plante, Richter & Zubairy (2025, Dallas Fed WP 2513)."))
   ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
   ft <- style_tbl_footer(ft)
 

@@ -3,9 +3,9 @@
 
 # bp change in long-term rate per 1 pp change in projected debt/GDP
 elasticity:
-  preferred: 3.0       # Plante, Richter & Zubairy (2025, Dallas Fed WP 2513)
-  low: 2.0             # Neveu & Schafer (2024, CBO WP 2024-05)
-  high: 4.0            # Upper bound from literature
+  preferred: 2.0       # Neveu & Schafer (2024, CBO WP 2024-05)
+  low: 1.5             # Furceri, Goncalves & Li (2025, IMF WP 25/142, Table 2 T10)
+  high: 3.0            # Plante, Richter & Zubairy (2025, Dallas Fed WP 2513)
 
 # ~75% of the fiscal effect flows through the term premium (Plante et al.)
 term_premium_share: 0.75
