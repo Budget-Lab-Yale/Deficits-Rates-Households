@@ -122,6 +122,7 @@ Deficits-Rates-Households/
 │   ├── eval_csv/               # CBO eval-projections CSV data (checked in)
 │   │   ├── baselines.csv
 │   │   ├── baseline_changes.csv
+│   │   ├── budget_vintage_calendar.csv
 │   │   └── cbo_gdp_vintages.csv
 │   ├── budget_projections/     # CBO Budget Projections Excel (gitignored)
 │   └── economic_projections/   # CBO Economic Projections Excel (gitignored)

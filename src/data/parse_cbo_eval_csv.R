@@ -82,7 +82,9 @@ parse_cbo_eval_primary <- function(config) {
     )
   )
 
-  # Build the 2015+ budget-vintage calendar from local Budget Projections files.
+  # Build the 2015+ budget-vintage calendar.
+  # Primary source: checked-in calendar CSV (no Excel files needed for CSV vintages).
+  # Fallback: scan Budget Projections Excel filenames.
   start_vintage <- as.Date(config$csv_sample_start_vintage %||% "2015-08-01")
   if (is.na(start_vintage)) {
     stop("csv_sample_start_vintage is invalid")
@@ -93,9 +95,18 @@ parse_cbo_eval_primary <- function(config) {
     stop("latest_excel_append_vintage is invalid")
   }
 
-  all_budget_vintages <- get_budget_projection_vintages(config)
-  if (length(all_budget_vintages) == 0) {
-    stop("No budget projection vintages found in cbo_budget_dir")
+  calendar_csv <- resolve_path(config$cbo_vintage_calendar_csv %||%
+                                 file.path(config$cbo_eval_dir, "budget_vintage_calendar.csv"))
+  if (file.exists(calendar_csv)) {
+    cal_df <- read.csv(calendar_csv, stringsAsFactors = FALSE)
+    all_budget_vintages <- sort(as.Date(cal_df$vintage_date))
+    message(sprintf("  Vintage calendar: %s (%d dates)", calendar_csv, length(all_budget_vintages)))
+  } else {
+    all_budget_vintages <- get_budget_projection_vintages(config)
+    if (length(all_budget_vintages) == 0) {
+      stop("No budget projection vintages found in cbo_budget_dir")
+    }
+    message(sprintf("  Vintage calendar: derived from Excel filenames (%d dates)", length(all_budget_vintages)))
   }
 
   max_csv_vintage <- max(baselines$baseline_date, na.rm = TRUE)
