@@ -47,7 +47,6 @@ apply_config_defaults <- function(config) {
 
   if (is.null(config$fetch)) config$fetch <- list()
   config$fetch$cbo_github <- isTRUE(config$fetch$cbo_github %||% FALSE)
-  config$fetch$fred <- isTRUE(config$fetch$fred %||% FALSE)
 
   config
 }
@@ -68,8 +67,17 @@ get_data_path <- function(config, interface = NULL, version = NULL, vintage = NU
 
 create_vintage_dir <- function(config, ...) {
   path <- get_data_path(config, ...)
-  dir.create(path, recursive = TRUE, showWarnings = FALSE)
-  path
+  tryCatch({
+    dir.create(path, recursive = TRUE, showWarnings = FALSE)
+    if (!dir.exists(path)) {
+      warning(sprintf("Could not create data archive directory: %s — archiving will be skipped.", path))
+      return(NULL)
+    }
+    path
+  }, error = function(e) {
+    warning(sprintf("Could not create data archive directory: %s — archiving will be skipped.", path))
+    NULL
+  })
 }
 
 # ---- Dependency Tracking ----

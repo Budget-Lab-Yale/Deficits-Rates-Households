@@ -310,11 +310,19 @@ parse_latest_excel_append <- function(config, append_vintage_date) {
     target_vintage = append_vintage_date
   )
 
-  if (is.na(budget_file)) {
-    stop(sprintf("Could not find budget Excel file for append vintage %s", vintage_key))
-  }
-  if (is.na(econ_file)) {
-    stop(sprintf("Could not find economic Excel file for append vintage %s", vintage_key))
+  if (is.na(budget_file) || is.na(econ_file)) {
+    missing <- c()
+    if (is.na(budget_file)) missing <- c(missing, sprintf(
+      "    Budget:   input/budget_projections/51118-%s-Budget-Projections.xlsx", vintage_key))
+    if (is.na(econ_file)) missing <- c(missing, sprintf(
+      "    Economic: input/economic_projections/51135-%s-Economic-Projections.xlsx", vintage_key))
+    stop(paste0(
+      "Missing required CBO Excel file(s) for vintage ", vintage_key, ".\n",
+      "  The pipeline requires these files to include the latest CBO projection vintage.\n",
+      "  Download from https://www.cbo.gov/data/budget-economic-data and place in:\n",
+      paste(missing, collapse = "\n"), "\n",
+      "  See README.md for detailed instructions."
+    ))
   }
 
   message(sprintf("  Appending latest Excel vintage %s", vintage_key))
@@ -359,13 +367,26 @@ parse_latest_excel_append <- function(config, append_vintage_date) {
 get_budget_projection_vintages <- function(config) {
   budget_dir <- resolve_path(config$cbo_budget_dir)
   if (!dir.exists(budget_dir)) {
-    stop(sprintf("Budget Projections directory not found: %s", budget_dir))
+    stop(paste0(
+      "Budget Projections directory not found: ", budget_dir, "\n",
+      "  Download CBO Budget Projections Excel files from:\n",
+      "    https://www.cbo.gov/data/budget-economic-data\n",
+      "  Place 51118-YYYY-MM-Budget-Projections.xlsx files in:\n",
+      "    input/budget_projections/\n",
+      "  See README.md for detailed instructions."
+    ))
   }
 
   files <- list.files(budget_dir, pattern = "51118.*\\.xls(x?)$",
                       full.names = TRUE, ignore.case = TRUE)
   if (length(files) == 0) {
-    stop(sprintf("No 51118 budget projection files found in %s", budget_dir))
+    stop(paste0(
+      "No CBO Budget Projection Excel files found in: ", budget_dir, "\n",
+      "  Download from https://www.cbo.gov/data/budget-economic-data\n",
+      "  Place 51118-YYYY-MM-Budget-Projections.xlsx files in:\n",
+      "    input/budget_projections/\n",
+      "  See README.md for detailed instructions."
+    ))
   }
 
   vint <- as.Date(vapply(basename(files), extract_vintage_from_filename, as.Date(NA)))

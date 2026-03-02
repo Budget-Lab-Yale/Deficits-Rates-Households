@@ -1,8 +1,5 @@
 # Runtime configuration for Deficits-Rates-Households pipeline
 
-# FRED API key (only needed when fetch.fred=true)
-fred_api_key: ""
-
 # CBO data source mode
 # - eval_csv_primary: use eval-projections CSV inputs + latest Excel append
 # - excel_legacy: parse all historical Excel decomposition/econ files
@@ -20,7 +17,6 @@ max_econ_lag_days: 365
 # If enabled, each fetch is required to succeed (fail-fast behavior).
 fetch:
   cbo_github: false
-  fred: false
 
 # Optional validation parser for Budget debt/GDP tables (slow, not used in core outputs)
 parse_budget_validation: false
