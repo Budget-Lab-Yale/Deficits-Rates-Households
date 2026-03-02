@@ -55,33 +55,6 @@ parse_cbo_eval_primary <- function(config) {
     stop("Failed to parse one or more changes_baseline_date values in baseline_changes.csv")
   }
 
-  deps <- rbind(
-    make_dependency_row(
-      dependency_class = "local_file",
-      required = TRUE,
-      status = "ok",
-      source = "CBO eval-projections",
-      series = "baselines.csv",
-      url = baselines_path,
-      interface = config$interface,
-      version = config$version,
-      vintage = format(Sys.Date(), "%Y-%m-%d"),
-      notes = sprintf("%d rows", nrow(baselines))
-    ),
-    make_dependency_row(
-      dependency_class = "local_file",
-      required = TRUE,
-      status = "ok",
-      source = "CBO eval-projections",
-      series = "baseline_changes.csv",
-      url = changes_path,
-      interface = config$interface,
-      version = config$version,
-      vintage = format(Sys.Date(), "%Y-%m-%d"),
-      notes = sprintf("%d rows", nrow(changes))
-    )
-  )
-
   # Build the 2015+ budget-vintage calendar.
   # Primary source: checked-in calendar CSV (no Excel files needed for CSV vintages).
   # Fallback: scan Budget Projections Excel filenames.
@@ -128,9 +101,7 @@ parse_cbo_eval_primary <- function(config) {
 
   decomp <- build_decomp_from_changes(changes, baselines, calendar, config)
 
-  gdp_result <- load_gdp_vintages(config)
-  econ <- gdp_result$vintages
-  deps <- rbind(deps, gdp_result$dependencies)
+  econ <- load_gdp_vintages(config)
 
   # Append latest Excel vintage (currently 2026-02), including GDP rows.
   if (isTRUE(config$append_latest_excel %||% TRUE)) {
@@ -140,8 +111,6 @@ parse_cbo_eval_primary <- function(config) {
     econ <- rbind(econ, append$econ)
     econ <- econ[order(econ$vintage_date, econ$year), ]
     econ <- econ[!duplicated(econ[, c("vintage_date", "year")], fromLast = TRUE), ]
-
-    deps <- rbind(deps, append$dependencies)
   }
 
   decomp <- decomp[order(decomp$vintage_date), ]
@@ -155,8 +124,7 @@ parse_cbo_eval_primary <- function(config) {
   list(
     budget_vintages = data.frame(),
     econ_vintages = econ,
-    decomp_vintages = decomp,
-    dependencies = deps
+    decomp_vintages = decomp
   )
 }
 
@@ -254,7 +222,6 @@ load_gdp_vintages <- function(config) {
 
   gdp <- read.csv(gdp_path, stringsAsFactors = FALSE)
 
-  # Accept either canonical output names or a small alias set.
   if (!("vintage_date" %in% names(gdp))) {
     stop(sprintf("GDP table missing vintage_date column: %s", gdp_path))
   }
@@ -274,20 +241,7 @@ load_gdp_vintages <- function(config) {
     stop(sprintf("GDP table contains NA gdp_bn values: %s", gdp_path))
   }
 
-  dep <- make_dependency_row(
-    dependency_class = "local_file",
-    required = TRUE,
-    status = "ok",
-    source = "CBO GDP vintages",
-    series = "GDP vintage table",
-    url = gdp_path,
-    interface = config$interface,
-    version = config$version,
-    vintage = format(Sys.Date(), "%Y-%m-%d"),
-    notes = sprintf("%d vintage-year rows", nrow(gdp))
-  )
-
-  list(vintages = gdp, dependencies = dep)
+  gdp
 }
 
 
@@ -344,34 +298,7 @@ parse_latest_excel_append <- function(config, append_vintage_date) {
     stop(sprintf("Failed to parse GDP rows from latest econ Excel: %s", econ_file))
   }
 
-  deps <- rbind(
-    make_dependency_row(
-      dependency_class = "local_file",
-      required = TRUE,
-      status = "ok",
-      source = "CBO Excel Decomp",
-      series = sprintf("Fiscal-policy decomposition (%s)", format(append_vintage_date, "%b %Y")),
-      url = budget_file,
-      interface = config$interface,
-      version = config$version,
-      vintage = vintage_key,
-      notes = sprintf("Sheet: %s", lookup$sheet)
-    ),
-    make_dependency_row(
-      dependency_class = "local_file",
-      required = TRUE,
-      status = "ok",
-      source = "CBO Excel",
-      series = sprintf("Economic Projections (%s)", format(append_vintage_date, "%b %Y")),
-      url = econ_file,
-      interface = config$interface,
-      version = config$version,
-      vintage = vintage_key,
-      notes = "Latest-vintage GDP append"
-    )
-  )
-
-  list(decomp = decomp, econ = econ, dependencies = deps)
+  list(decomp = decomp, econ = econ)
 }
 
 

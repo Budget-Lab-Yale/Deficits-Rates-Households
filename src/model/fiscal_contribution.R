@@ -21,12 +21,6 @@ compute_fiscal_contribution <- function(panel, coefs, config) {
   passthrough  <- coefs$passthrough
 
   scenarios <- config$scenarios
-  if (is.null(scenarios)) {
-    scenarios <- list(
-      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
-      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
-    )
-  }
 
   results <- list()
 
@@ -124,12 +118,6 @@ compute_historical_contributions <- function(panel, coefs, config) {
   elasticity <- coefs$elasticity$preferred
 
   scenarios <- config$scenarios
-  if (is.null(scenarios)) {
-    scenarios <- list(
-      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
-      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
-    )
-  }
 
   all_rows <- list()
 

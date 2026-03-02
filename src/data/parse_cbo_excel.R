@@ -1,19 +1,12 @@
-# parse_cbo_excel.R — Parse CBO Budget and Economic Projections Excel files
-#
-# Budget Projections (51118-*): Extracts projected debt/GDP ratios directly
-#   from CBO's Table B-3 / Table 1-3 / Table 1-2 (naming varies by vintage).
-#   These are the authoritative values.
+# parse_cbo_excel.R — Parse CBO Economic Projections and Legislative Decomposition Excel files
 #
 # Economic Projections (51135-*): Extracts projected nominal GDP in billions
-#   from the "3. Fiscal Year" sheet. Used for validation and as a vintaged
-#   denominator if computing debt/GDP from GitHub debt data.
+#   from the "3. Fiscal Year" sheet.
 #
-# Handles two layout eras:
-#   Pre-2023: 3 label columns (A-C), data starts col D, year headers are integers
-#   2023+:    2 label columns (A-B), data starts col B, "Actual, YYYY" in first data cell
+# Budget Projections (51118-*): Extracts legislative deficit decomposition
+#   from Table A-1 / equivalent sheets using hardcoded lookup.
 #
-# Also handles: trailing spaces in sheet names, varying table numbering
-# (Table 1-2, 1-3, B-3, Table 2, Table 3), and the 2023-12 short-range special file.
+# Budget debt/GDP validation parsing has been moved to deprecated/validate_budget_debt_gdp.R.
 
 library(readxl)
 library(dplyr)
@@ -23,52 +16,24 @@ library(dplyr)
 # ===========================================================================
 
 parse_cbo_excel_files <- function(config) {
-  # Parse Budget, Economic, and Legislative Decomposition data. Returns a list with:
-  #   $budget_vintages: debt/GDP by (vintage_date, year)
+  # Parse Economic and Legislative Decomposition data. Returns a list with:
+  #   $budget_vintages: empty (budget validation moved to deprecated/)
   #   $econ_vintages:   nominal GDP by (vintage_date, year)
   #   $decomp_vintages: legislative deficit decomposition by vintage
-  #   $dependencies:    provenance records
 
-  if (isTRUE(config$parse_budget_validation %||% FALSE)) {
-    budget_result <- parse_budget_projections_dir(config)
-  } else {
-    budget_result <- list(
-      vintages = data.frame(),
-      dependencies = make_dependency_row(
-        dependency_class = "skipped",
-        required = FALSE,
-        status = "skipped",
-        source = "CBO Excel",
-        series = "Budget Projections debt/GDP validation",
-        url = config$cbo_budget_dir,
-        interface = config$interface,
-        version = config$version,
-        vintage = format(Sys.time(), "%Y%m%d_%H%M%S"),
-        notes = "Skipped by runtime config (parse_budget_validation=false)"
-      )
-    )
-  }
   econ_result   <- parse_econ_projections_dir(config)
   decomp_result <- parse_legislative_decomposition(config)
 
   list(
-    budget_vintages = budget_result$vintages,
+    budget_vintages = data.frame(),
     econ_vintages   = econ_result$vintages,
-    decomp_vintages = decomp_result$vintages,
-    dependencies    = rbind(budget_result$dependencies,
-                            econ_result$dependencies,
-                            decomp_result$dependencies)
+    decomp_vintages = decomp_result$vintages
   )
 }
 
 
 save_cbo_excel <- function(cbo_excel, output_dir) {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-
-  if (!is.null(cbo_excel$budget_vintages) && nrow(cbo_excel$budget_vintages) > 0) {
-    write.csv(cbo_excel$budget_vintages,
-              file.path(output_dir, "cbo_excel_debt_gdp.csv"), row.names = FALSE)
-  }
 
   if (!is.null(cbo_excel$econ_vintages) && nrow(cbo_excel$econ_vintages) > 0) {
     write.csv(cbo_excel$econ_vintages,
@@ -80,251 +45,7 @@ save_cbo_excel <- function(cbo_excel, output_dir) {
               file.path(output_dir, "cbo_legislative_decomp.csv"), row.names = FALSE)
   }
 
-  append_dependencies(output_dir, cbo_excel$dependencies)
   invisible(output_dir)
-}
-
-
-# ===========================================================================
-# Budget Projections (Debt / GDP)
-# ===========================================================================
-
-parse_budget_projections_dir <- function(config) {
-  budget_dir <- resolve_path(config$cbo_budget_dir %||% config$cbo_excel_dir)
-
-  if (!dir.exists(budget_dir)) {
-    message(sprintf("  Budget Projections directory not found: %s", budget_dir))
-    return(empty_result())
-  }
-
-  xlsx_files <- list.files(budget_dir, pattern = "51118.*\\.xls(x?)$",
-                           full.names = TRUE, ignore.case = TRUE)
-
-  if (length(xlsx_files) == 0) {
-    message("  No Budget Projections files found (pattern: 51118*.xls[x])")
-    return(empty_result())
-  }
-
-  message(sprintf("  Found %d Budget Projections file(s)", length(xlsx_files)))
-
-  all_vintages <- list()
-  deps <- empty_deps()
-
-  for (xlsx_path in xlsx_files) {
-    fname <- basename(xlsx_path)
-    vintage_date <- extract_vintage_from_filename(fname)
-    if (is.na(vintage_date)) {
-      message(sprintf("  %s: cannot parse vintage date; skipping", fname))
-      next
-    }
-
-    message(sprintf("  Parsing budget: %s (%s)", fname, format(vintage_date, "%b %Y")))
-
-    parsed <- parse_one_budget_file(xlsx_path, vintage_date)
-    if (!is.null(parsed) && nrow(parsed) > 0) {
-      all_vintages[[fname]] <- parsed
-      message(sprintf("    -> %d years, debt/GDP: %.1f%% to %.1f%%",
-                      nrow(parsed),
-                      min(parsed$debt_gdp_pct, na.rm = TRUE),
-                      max(parsed$debt_gdp_pct, na.rm = TRUE)))
-    } else {
-      message(sprintf("    -> FAILED to parse"))
-    }
-
-    deps <- rbind(deps, make_dependency_row(
-      dependency_class = "local_file",
-      required = FALSE,
-      status = "ok",
-      source = "CBO Excel",
-      series = sprintf("Budget Projections (%s)", format(vintage_date, "%b %Y")),
-      url = xlsx_path,
-      interface = config$interface,
-      version = config$version,
-      vintage = format(vintage_date, "%Y-%m"),
-      notes = "Budget debt/GDP validation file"
-    ))
-  }
-
-  if (length(all_vintages) == 0) {
-    message("  WARNING: No Budget Projections files parsed successfully")
-    return(list(vintages = data.frame(), dependencies = deps))
-  }
-
-  vintages <- do.call(rbind, all_vintages)
-  rownames(vintages) <- NULL
-  vintages <- vintages[order(vintages$vintage_date, vintages$year), ]
-
-  message(sprintf("  Budget total: %d vintage-year pairs across %d vintages",
-                  nrow(vintages), length(unique(vintages$vintage_date))))
-
-  list(vintages = vintages, dependencies = deps)
-}
-
-
-parse_one_budget_file <- function(xlsx_path, vintage_date) {
-  sheets <- tryCatch(excel_sheets(xlsx_path), error = function(e) character(0))
-  if (length(sheets) == 0) return(NULL)
-
-  # ---- Find the debt sheet ----
-  # Strategy: search for a sheet whose early rows contain "Projections of Federal Debt"
-  # Prefer sheets WITHOUT trailing spaces (compact format, fewer header rows)
-  target_sheet <- find_debt_sheet(xlsx_path, sheets)
-  if (is.null(target_sheet)) {
-    message(sprintf("    No debt sheet found. Sheets: %s",
-                    paste(sheets, collapse = ", ")))
-    return(NULL)
-  }
-
-  message(sprintf("    Using sheet: '%s'", target_sheet))
-
-  # ---- Read sheet ----
-  raw <- tryCatch(
-    read_excel(xlsx_path, sheet = target_sheet, col_names = FALSE),
-    error = function(e) NULL
-  )
-  if (is.null(raw)) return(NULL)
-
-  nr <- nrow(raw)
-  nc <- ncol(raw)
-
-  # ---- Find year header row ----
-  year_info <- find_year_row(raw, max_scan = min(15, nr))
-  if (is.null(year_info)) {
-    message("    Cannot find year header row")
-    return(NULL)
-  }
-
-  years     <- year_info$years
-  year_cols <- year_info$cols
-  year_row  <- year_info$row
-  message(sprintf("    Year row: %d, cols %d-%d, years %d-%d",
-                  year_row, min(year_cols), max(year_cols),
-                  min(years), max(years)))
-
-  # ---- Find debt/GDP row ----
-  # Scan downward from year row for "percentage of GDP" or "as a percentage of gdp"
-  # There may be multiple such rows (beginning-of-year vs end-of-year debt).
-  # We want the one after "End of the Year" / "end of the year".
-  debt_gdp_row <- find_debt_gdp_row(raw, year_row, nr, nc)
-  if (is.null(debt_gdp_row)) {
-    message("    Cannot find debt/GDP row")
-    return(NULL)
-  }
-
-  message(sprintf("    Debt/GDP row: %d", debt_gdp_row))
-
-  # ---- Extract values ----
-  values <- suppressWarnings(
-    as.numeric(as.character(unlist(raw[debt_gdp_row, year_cols])))
-  )
-
-  result <- data.frame(
-    vintage_date = vintage_date,
-    year         = years,
-    debt_gdp_pct = values,
-    source       = "CBO Excel",
-    stringsAsFactors = FALSE
-  )
-  result[!is.na(result$debt_gdp_pct), ]
-}
-
-
-find_debt_sheet <- function(xlsx_path, sheets) {
-  # Select debt/GDP sheets using structure (year row + %GDP row), not
-  # debt-related figure text in headers.
-  preferred_patterns <- c(
-    "^table b-3$", "^table 1-2$", "^table 1-3$", "^table 1-4$",
-    "^table 1-5$", "^table 1-6$", "^table 1-7$", "^table 2$",
-    "^table 3$", "^table 4-4$", "^table 5$"
-  )
-
-  inspect_sheet <- function(sheet_name) {
-    raw <- tryCatch(
-      read_excel(xlsx_path, sheet = sheet_name, col_names = FALSE, n_max = 120),
-      error = function(e) NULL
-    )
-    if (is.null(raw) || nrow(raw) == 0) return(NULL)
-
-    nr <- nrow(raw)
-    nc <- ncol(raw)
-    top10 <- tolower(paste(unlist(raw[1:min(10, nr), ]), collapse = " "))
-    top40 <- tolower(paste(unlist(raw[1:min(40, nr), ]), collapse = " "))
-
-    year_info <- find_year_row(raw, max_scan = min(20, nr))
-    has_year <- !is.null(year_info)
-    has_pct <- FALSE
-    n_pct_values <- 0
-    if (has_year) {
-      pct_row <- find_debt_gdp_row(raw, year_info$row, nr, nc)
-      has_pct <- !is.null(pct_row)
-      if (has_pct) {
-        pct_vals <- suppressWarnings(
-          as.numeric(as.character(unlist(raw[pct_row, year_info$cols])))
-        )
-        n_pct_values <- sum(!is.na(pct_vals))
-      }
-    }
-
-    sheet_trim <- trimws(sheet_name)
-    sheet_lc <- tolower(sheet_trim)
-    has_debt_text <- grepl("projections of federal debt|federal debt held|debt held by the public",
-                           top40)
-
-    score <- 0
-    if (has_year) score <- score + 2
-    if (has_pct) score <- score + 5
-    if (n_pct_values >= 5) score <- score + 2
-    if (has_pct && n_pct_values == 0) score <- score - 6
-    if (has_debt_text) score <- score + 2
-    if (grepl("^table\\s", sheet_lc)) score <- score + 1
-    if (grepl("figure", sheet_lc)) score <- score - 6
-    if (grepl("summary figure", sheet_lc)) score <- score - 4
-    if (grepl("summary table", sheet_lc)) score <- score - 2
-    if (grepl("supp|supplement|box|^contents?$|^content$", sheet_lc)) score <- score - 2
-    if (grepl("changes in cbo", top10)) score <- score - 4
-
-    is_preferred <- any(vapply(preferred_patterns, function(p) {
-      grepl(p, sheet_lc)
-    }, logical(1)))
-    if (is_preferred) score <- score + 2
-
-    list(
-      sheet = sheet_name,
-      score = score,
-      has_year = has_year,
-      has_pct = has_pct,
-      n_pct_values = n_pct_values,
-      has_debt_text = has_debt_text
-    )
-  }
-
-  diagnostics <- lapply(sheets, inspect_sheet)
-  diagnostics <- Filter(Negate(is.null), diagnostics)
-  if (length(diagnostics) == 0) return(NULL)
-
-  # First choice: structural debt/GDP candidates.
-  candidates <- Filter(function(x) {
-    x$has_year && x$has_pct && x$n_pct_values >= 5
-  }, diagnostics)
-
-  # Fallback: year row + debt text.
-  if (length(candidates) == 0) {
-    candidates <- Filter(function(x) x$has_year && x$has_debt_text, diagnostics)
-  }
-  if (length(candidates) == 0) {
-    candidates <- Filter(function(x) x$has_year && x$has_pct, diagnostics)
-  }
-  if (length(candidates) == 0) return(NULL)
-
-  scores <- vapply(candidates, `[[`, numeric(1), "score")
-  best_idx <- which(scores == max(scores))
-  if (length(best_idx) > 1) {
-    # Tie-break toward cleaner table names (shorter trimmed names).
-    name_len <- vapply(candidates[best_idx], function(x) nchar(trimws(x$sheet)), integer(1))
-    best_idx <- best_idx[which.min(name_len)]
-  }
-
-  candidates[[best_idx[1]]]$sheet
 }
 
 
@@ -442,7 +163,6 @@ parse_econ_projections_dir <- function(config) {
   message(sprintf("  Found %d Economic Projections file(s)", length(xlsx_files)))
 
   all_vintages <- list()
-  deps <- empty_deps()
 
   for (xlsx_path in xlsx_files) {
     fname <- basename(xlsx_path)
@@ -464,19 +184,6 @@ parse_econ_projections_dir <- function(config) {
     } else {
       message(sprintf("    -> Skipped (no fiscal year GDP data)"))
     }
-
-    deps <- rbind(deps, make_dependency_row(
-      dependency_class = "local_file",
-      required = TRUE,
-      status = "ok",
-      source = "CBO Excel",
-      series = sprintf("Economic Projections (%s)", format(vintage_date, "%b %Y")),
-      url = xlsx_path,
-      interface = config$interface,
-      version = config$version,
-      vintage = format(vintage_date, "%Y-%m"),
-      notes = "Economic projections source file"
-    ))
   }
 
   if (length(all_vintages) == 0) {
@@ -490,7 +197,7 @@ parse_econ_projections_dir <- function(config) {
   message(sprintf("  Econ total: %d vintage-year pairs across %d vintages",
                   nrow(vintages), length(unique(vintages$vintage_date))))
 
-  list(vintages = vintages, dependencies = deps)
+  list(vintages = vintages)
 }
 
 
@@ -575,16 +282,6 @@ resolve_path <- function(path) {
 }
 
 
-empty_deps <- function() {
-  empty_dependency_frame()
-}
-
-
-empty_result <- function() {
-  list(vintages = data.frame(), dependencies = empty_deps())
-}
-
-
 # ===========================================================================
 # Legislative Decomposition (Table A-1 / equivalent)
 # ===========================================================================
@@ -645,7 +342,6 @@ parse_legislative_decomposition <- function(config) {
                   length(all_files)))
 
   all_vintages <- list()
-  deps <- empty_deps()
 
   file_meta <- data.frame(
     path = all_files,
@@ -684,19 +380,6 @@ parse_legislative_decomposition <- function(config) {
                     format(parsed$since_date, "%b %Y"),
                     parsed$legislative_deficit_horizon_bn,
                     parsed$legislative_deficit_window_bn))
-
-    deps <- rbind(deps, make_dependency_row(
-      dependency_class = "local_file",
-      required = TRUE,
-      status = "ok",
-      source = "CBO Excel Decomp",
-      series = sprintf("Fiscal-policy decomposition (%s)", format(vintage_date, "%b %Y")),
-      url = fpath,
-      interface = config$interface,
-      version = config$version,
-      vintage = vintage_key,
-      notes = sprintf("Sheet: %s", lookup$sheet)
-    ))
   }
 
   vintages <- do.call(rbind, all_vintages)
@@ -712,7 +395,7 @@ parse_legislative_decomposition <- function(config) {
                   format(min(vintages$vintage_date), "%b %Y"),
                   format(max(vintages$vintage_date), "%b %Y")))
 
-  list(vintages = vintages, dependencies = deps)
+  list(vintages = vintages)
 }
 
 
@@ -787,49 +470,18 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
   value_horizon <- sum(annual_values[idx])
 
   # ---- 5. Adjust for executive-action tariffs if flagged ----
-  # Customs revenue is policy-driven in 2026 but classified by CBO as technical.
   if (isTRUE(lookup$include_technical_customs)) {
-    customs_row <- find_technical_customs_row(raw, year_row, leg_row, nr, nc)
-    if (is.null(customs_row)) {
-      stop("include_technical_customs=TRUE but Customs duties row was not found")
-    }
-
-    customs_window <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, cumul_col]))))
-    customs_annual <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, year_cols]))))
-    if (is.na(customs_window) || any(is.na(customs_annual[idx]))) {
-      stop("Failed to extract customs values for reported or harmonized window")
-    }
-    customs_horizon <- sum(customs_annual[idx])
-
-    # Positive customs revenue lowers deficits, so subtract from deficit changes.
-    window_value <- window_value - customs_window
-    value_horizon <- value_horizon - customs_horizon
-    message(sprintf("    Technical customs adjustment: reported -$%.1fB, harmonized -$%.1fB",
-                    customs_window, customs_horizon))
+    adj <- adjust_customs_row(raw, find_technical_customs_row(raw, year_row, leg_row, nr, nc),
+                              "technical", cumul_col, year_cols, idx)
+    window_value <- window_value - adj$window
+    value_horizon <- value_horizon - adj$horizon
   }
 
-  # ---- 5b. Adjust for economic customs (import volume loss) if flagged ----
-  # CBO's economic changes include a customs-duty revenue *loss* from reduced
-  # import volumes caused by tariffs. This is also policy-driven.
   if (isTRUE(lookup$include_economic_customs)) {
-    econ_customs_row <- find_economic_customs_row(raw, year_row, leg_row, nr, nc)
-    if (is.null(econ_customs_row)) {
-      stop("include_economic_customs=TRUE but economic Customs duties row was not found")
-    }
-
-    econ_customs_window <- suppressWarnings(as.numeric(as.character(unlist(raw[econ_customs_row, cumul_col]))))
-    econ_customs_annual <- suppressWarnings(as.numeric(as.character(unlist(raw[econ_customs_row, year_cols]))))
-    if (is.na(econ_customs_window) || any(is.na(econ_customs_annual[idx]))) {
-      stop("Failed to extract economic customs values for reported or harmonized window")
-    }
-    econ_customs_horizon <- sum(econ_customs_annual[idx])
-
-    # Economic customs values are negative (revenue loss) — subtracting a negative
-    # adds to the deficit, which is the correct direction.
-    window_value <- window_value - econ_customs_window
-    value_horizon <- value_horizon - econ_customs_horizon
-    message(sprintf("    Economic customs adjustment: reported -$%.1fB, harmonized -$%.1fB",
-                    econ_customs_window, econ_customs_horizon))
+    adj <- adjust_customs_row(raw, find_economic_customs_row(raw, year_row, leg_row, nr, nc),
+                              "economic", cumul_col, year_cols, idx)
+    window_value <- window_value - adj$window
+    value_horizon <- value_horizon - adj$horizon
   }
 
   window_label <- trimws(as.character(raw[year_row, cumul_col]))
@@ -851,6 +503,22 @@ parse_one_decomp <- function(xlsx_path, lookup, vintage_date, config) {
     sheet_name = lookup$sheet,
     stringsAsFactors = FALSE
   )
+}
+
+
+adjust_customs_row <- function(raw, customs_row, label, cumul_col, year_cols, idx) {
+  if (is.null(customs_row)) {
+    stop(sprintf("include_%s_customs=TRUE but Customs duties row was not found", label))
+  }
+  customs_window <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, cumul_col]))))
+  customs_annual <- suppressWarnings(as.numeric(as.character(unlist(raw[customs_row, year_cols]))))
+  if (is.na(customs_window) || any(is.na(customs_annual[idx]))) {
+    stop(sprintf("Failed to extract %s customs values for reported or harmonized window", label))
+  }
+  customs_horizon <- sum(customs_annual[idx])
+  message(sprintf("    %s customs adjustment: reported -$%.1fB, harmonized -$%.1fB",
+                  tools::toTitleCase(label), customs_window, customs_horizon))
+  list(window = customs_window, horizon = customs_horizon)
 }
 
 

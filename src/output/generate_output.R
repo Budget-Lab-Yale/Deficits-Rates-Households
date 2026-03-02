@@ -29,17 +29,13 @@ generate_all_output <- function(panel, fiscal, costs, costs_table,
   }
 
   # ---- 4. Charts ----
-  tryCatch({
-    plot_legislative_delta(panel, config, output_dir)
-    plot_cumulative_legislative(panel, config, output_dir)
-    if (!is.null(historical) && nrow(historical) > 0) {
-      plot_cumulative_rate_effect(historical, config, output_dir)
-      plot_historical_contributions(historical, config, output_dir)
-    }
-    plot_household_impacts(costs_table, config, output_dir)
-  }, error = function(e) {
-    message(sprintf("  WARNING: Chart generation failed: %s", e$message))
-  })
+  plot_legislative_delta(panel, config, output_dir)
+  plot_cumulative_legislative(panel, config, output_dir)
+  if (!is.null(historical) && nrow(historical) > 0) {
+    plot_cumulative_rate_effect(historical, config, output_dir)
+    plot_historical_contributions(historical, config, output_dir)
+  }
+  plot_household_impacts(costs_table, config, output_dir)
 
   # ---- 5. Markdown summary ----
   generate_markdown_summary(fiscal, costs, costs_table, panel, config, output_dir)
@@ -80,17 +76,46 @@ plot_legislative_delta <- function(panel, config, output_dir) {
 }
 
 
-plot_cumulative_legislative <- function(panel, config, output_dir) {
-  # Line chart showing cumulative legislative delta(debt/GDP) for both scenarios
+plot_cumulative_series <- function(plot_data, y_var, endpoint_fmt,
+                                   title, subtitle, y_label,
+                                   filename, config, output_dir) {
+  if (length(plot_data) == 0) return(invisible(NULL))
 
-  scenarios <- config$scenarios
-  if (is.null(scenarios)) {
-    scenarios <- list(
-      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
-      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
+  combined <- do.call(rbind, plot_data)
+  endpoints <- do.call(rbind, lapply(plot_data, function(d) tail(d, 1)))
+
+  p <- ggplot(combined, aes(x = vintage_date, y = .data[[y_var]], color = scenario)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2) +
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+    geom_text(
+      data = endpoints,
+      aes(label = sprintf(endpoint_fmt, .data[[y_var]])),
+      hjust = -0.15, vjust = 0.4, size = 3.8, fontface = "bold", show.legend = FALSE
+    ) +
+    scale_color_manual(values = c("Since 2015" = "#2166AC",
+                                   "Since 2022" = "#E08214"),
+                       name = NULL) +
+    scale_x_date(expand = expansion(mult = c(0.02, 0.12))) +
+    labs(title = title, subtitle = subtitle,
+         x = "CBO projection vintage", y = y_label) +
+    theme_minimal(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position = "top"
     )
-  }
 
+  ggsave(file.path(output_dir, filename), plot = p,
+         width = config$chart_width %||% 10,
+         height = config$chart_height %||% 6,
+         dpi = config$chart_dpi %||% 300, bg = "white")
+  message(sprintf("  Saved %s", filename))
+}
+
+
+plot_cumulative_legislative <- function(panel, config, output_dir) {
+  scenarios <- config$scenarios
   plot_data <- list()
 
   if (any(!is.na(panel$cumulative_since_2015))) {
@@ -98,13 +123,10 @@ plot_cumulative_legislative <- function(panel, config, output_dir) {
     d2015$scenario <- "Since 2015"
     d2015$cumulative <- d2015$cumulative_since_2015
     pts <- d2015[, c("vintage_date", "scenario", "cumulative")]
-    # Anchor at 0 on the last vintage before the scenario window
-    # (or the first vintage's since_date if no prior vintage in panel)
     start <- as.Date(scenarios$since_2015$start_vintage)
     prior <- panel$vintage_date[panel$vintage_date < start]
     anchor_date <- if (length(prior) > 0) max(prior) else as.Date(d2015$since_date[1])
-    anchor <- data.frame(vintage_date = anchor_date, scenario = "Since 2015", cumulative = 0)
-    pts <- rbind(anchor, pts)
+    pts <- rbind(data.frame(vintage_date = anchor_date, scenario = "Since 2015", cumulative = 0), pts)
     plot_data[["2015"]] <- pts
   }
 
@@ -116,64 +138,21 @@ plot_cumulative_legislative <- function(panel, config, output_dir) {
     start <- as.Date(scenarios$since_2022$start_vintage)
     prior <- panel$vintage_date[panel$vintage_date < start]
     if (length(prior) > 0) {
-      anchor <- data.frame(vintage_date = max(prior), scenario = "Since 2022", cumulative = 0)
-      pts <- rbind(anchor, pts)
+      pts <- rbind(data.frame(vintage_date = max(prior), scenario = "Since 2022", cumulative = 0), pts)
     }
     plot_data[["2022"]] <- pts
   }
 
-  if (length(plot_data) == 0) return(invisible(NULL))
-
-  combined <- do.call(rbind, plot_data)
-
-  # Label the endpoint of each series
-  endpoints <- do.call(rbind, lapply(plot_data, function(d) tail(d, 1)))
-
-  p <- ggplot(combined, aes(x = vintage_date, y = cumulative, color = scenario)) +
-    geom_line(linewidth = 0.8) +
-    geom_point(size = 2) +
-    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
-    geom_text(
-      data = endpoints,
-      aes(label = sprintf("%+.1f pp", cumulative)),
-      hjust = -0.15, vjust = 0.4, size = 3.8, fontface = "bold", show.legend = FALSE
-    ) +
-    scale_color_manual(values = c("Since 2015" = "#2166AC",
-                                   "Since 2022" = "#E08214"),
-                       name = NULL) +
-    scale_x_date(expand = expansion(mult = c(0.02, 0.12))) +
-    labs(
-      title = "Cumulative Legislative Contribution to Debt/GDP",
-      subtitle = "Cumulative change in projected debt/GDP attributable to enacted legislation",
-      x = "CBO projection vintage",
-      y = "Cumulative legislative \u0394(debt/GDP) (pp)"
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank(),
-      legend.position = "top"
-    )
-
-  ggsave(file.path(output_dir, "cumulative_legislative.png"), plot = p,
-         width = config$chart_width %||% 10,
-         height = config$chart_height %||% 6,
-         dpi = config$chart_dpi %||% 300, bg = "white")
-  message("  Saved cumulative_legislative.png")
+  plot_cumulative_series(plot_data, "cumulative", "%+.1f pp",
+    title = "Cumulative Legislative Contribution to Debt/GDP",
+    subtitle = "Cumulative change in projected debt/GDP attributable to enacted legislation",
+    y_label = "Cumulative legislative \u0394(debt/GDP) (pp)",
+    filename = "cumulative_legislative.png", config = config, output_dir = output_dir)
 }
 
 
 plot_cumulative_rate_effect <- function(historical, config, output_dir) {
-  # Combined line chart: cumulative rate effect (bp) for all scenarios
-
   scenarios <- config$scenarios
-  if (is.null(scenarios)) {
-    scenarios <- list(
-      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
-      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
-    )
-  }
-
   plot_data <- list()
 
   for (scenario_name in names(scenarios)) {
@@ -184,54 +163,18 @@ plot_cumulative_rate_effect <- function(historical, config, output_dir) {
 
     pts <- scen_data[, c("vintage_date", "cumulative_bp")]
     pts$scenario <- label
-
-    # Anchor at 0 before the first vintage
     prior <- historical$vintage_date[historical$vintage_date < start]
     anchor_date <- if (length(prior) > 0) max(prior) else start
-    anchor <- data.frame(vintage_date = anchor_date, cumulative_bp = 0,
-                         scenario = label, stringsAsFactors = FALSE)
-    pts <- rbind(anchor, pts)
+    pts <- rbind(data.frame(vintage_date = anchor_date, cumulative_bp = 0,
+                            scenario = label, stringsAsFactors = FALSE), pts)
     plot_data[[scenario_name]] <- pts
   }
 
-  if (length(plot_data) == 0) return(invisible(NULL))
-
-  combined <- do.call(rbind, plot_data)
-
-  # Label the endpoint of each series
-  endpoints <- do.call(rbind, lapply(plot_data, function(d) tail(d, 1)))
-
-  p <- ggplot(combined, aes(x = vintage_date, y = cumulative_bp, color = scenario)) +
-    geom_line(linewidth = 0.9) +
-    geom_point(size = 2) +
-    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
-    geom_text(
-      data = endpoints,
-      aes(label = sprintf("%+.0f bp", cumulative_bp)),
-      hjust = -0.15, vjust = 0.4, size = 3.8, fontface = "bold", show.legend = FALSE
-    ) +
-    scale_color_manual(values = c("Since 2015" = "#2166AC",
-                                   "Since 2022" = "#E08214"),
-                       name = NULL) +
-    scale_x_date(expand = expansion(mult = c(0.02, 0.12))) +
-    labs(
-      title = "Cumulative Legislative Contribution to Long-Term Treasury Rates",
-      subtitle = "Legislative effect on 10-year Treasury yields at 2 bp per pp of projected debt/GDP",
-      x = "CBO projection vintage",
-      y = "Cumulative rate effect (bp)"
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid.minor = element_blank(),
-      legend.position = "top"
-    )
-
-  ggsave(file.path(output_dir, "cumulative_rate_effect.png"), plot = p,
-         width = config$chart_width %||% 10,
-         height = config$chart_height %||% 6,
-         dpi = config$chart_dpi %||% 300, bg = "white")
-  message("  Saved cumulative_rate_effect.png")
+  plot_cumulative_series(plot_data, "cumulative_bp", "%+.0f bp",
+    title = "Cumulative Legislative Contribution to Long-Term Treasury Rates",
+    subtitle = "Legislative effect on 10-year Treasury yields at 2 bp per pp of projected debt/GDP",
+    y_label = "Cumulative rate effect (bp)",
+    filename = "cumulative_rate_effect.png", config = config, output_dir = output_dir)
 }
 
 

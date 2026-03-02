@@ -39,14 +39,17 @@ apply_config_defaults <- function(config) {
   config$projection_horizon <- config$projection_horizon %||% 10
   config$window_start_offset <- config$window_start_offset %||% 0
   config$max_econ_lag_days <- config$max_econ_lag_days %||% 365
-  config$parse_budget_validation <- isTRUE(config$parse_budget_validation %||% FALSE)
   config$cbo_data_source <- config$cbo_data_source %||% "eval_csv_primary"
   config$append_latest_excel <- isTRUE(config$append_latest_excel %||% TRUE)
   config$csv_sample_start_vintage <- config$csv_sample_start_vintage %||% "2015-08-01"
   config$latest_excel_append_vintage <- config$latest_excel_append_vintage %||% "2026-02-01"
 
-  if (is.null(config$fetch)) config$fetch <- list()
-  config$fetch$cbo_github <- isTRUE(config$fetch$cbo_github %||% FALSE)
+  if (is.null(config$scenarios)) {
+    config$scenarios <- list(
+      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
+      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
+    )
+  }
 
   config
 }
@@ -67,96 +70,28 @@ get_data_path <- function(config, interface = NULL, version = NULL, vintage = NU
 
 create_vintage_dir <- function(config, ...) {
   path <- get_data_path(config, ...)
-  tryCatch({
-    dir.create(path, recursive = TRUE, showWarnings = FALSE)
-    if (!dir.exists(path)) {
-      warning(sprintf("Could not create data archive directory: %s — archiving will be skipped.", path))
-      return(NULL)
-    }
-    path
-  }, error = function(e) {
+  dir.create(path, recursive = TRUE, showWarnings = FALSE)
+  if (!dir.exists(path)) {
     warning(sprintf("Could not create data archive directory: %s — archiving will be skipped.", path))
-    NULL
-  })
-}
-
-# ---- Dependency Tracking ----
-
-dependency_columns <- function() {
-  c(
-    "dependency_class",  # external_api | local_file | parser | skipped
-    "required",          # TRUE if failure should stop run
-    "status",            # ok | skipped | failed
-    "source",
-    "series",
-    "url",
-    "interface",
-    "version",
-    "vintage",
-    "notes",
-    "retrieved_at"
-  )
-}
-
-empty_dependency_frame <- function() {
-  cols <- dependency_columns()
-  out <- as.data.frame(setNames(replicate(length(cols), character(0), simplify = FALSE), cols))
-  out$required <- logical(0)
-  out
-}
-
-make_dependency_row <- function(dependency_class, required, status,
-                                source, series, url = NA_character_,
-                                interface = NA_character_, version = NA_character_,
-                                vintage = NA_character_, notes = NA_character_) {
-  data.frame(
-    dependency_class = dependency_class,
-    required = required,
-    status = status,
-    source = source,
-    series = series,
-    url = url,
-    interface = interface,
-    version = version,
-    vintage = vintage,
-    notes = notes,
-    retrieved_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-    stringsAsFactors = FALSE
-  )
-}
-
-coerce_dependencies <- function(df) {
-  if (is.null(df) || nrow(df) == 0) return(empty_dependency_frame())
-
-  cols <- dependency_columns()
-  missing <- setdiff(cols, names(df))
-  if (length(missing) > 0) {
-    for (m in missing) {
-      df[[m]] <- if (m == "required") FALSE else NA_character_
-    }
+    return(NULL)
   }
-  df <- df[, cols]
-  df$required <- as.logical(df$required)
-  df$status <- as.character(df$status)
-  df
+  path
 }
 
-write_dependencies_csv <- function(dir, deps_df) {
-  write.csv(coerce_dependencies(deps_df), file.path(dir, "dependencies.csv"), row.names = FALSE)
-}
+# ---- Manifest ----
 
-append_dependencies <- function(dir, new_deps) {
-  new_deps <- coerce_dependencies(new_deps)
-  if (nrow(new_deps) == 0) return(invisible(NULL))
-
-  deps_path <- file.path(dir, "dependencies.csv")
-  if (file.exists(deps_path)) {
-    existing <- coerce_dependencies(read.csv(deps_path, stringsAsFactors = FALSE))
-    combined <- rbind(existing, new_deps)
-  } else {
-    combined <- new_deps
+write_manifest <- function(dir, config, vintage_counts) {
+  lines <- c(
+    sprintf("Pipeline run: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+    sprintf("Data source:  %s", config$cbo_data_source %||% "excel_legacy"),
+    sprintf("Horizon:      %d years", config$projection_horizon %||% 10),
+    "",
+    "Vintage counts:"
+  )
+  for (nm in names(vintage_counts)) {
+    lines <- c(lines, sprintf("  %s: %d", nm, vintage_counts[[nm]]))
   }
-  write.csv(combined, deps_path, row.names = FALSE)
+  writeLines(lines, file.path(dir, "manifest.txt"))
 }
 
 # ---- Amortization Math ----

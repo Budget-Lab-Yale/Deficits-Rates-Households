@@ -88,13 +88,6 @@ build_dataset <- function(cbo_excel, config) {
   # ---- 3. Compute cumulative sums for each scenario ----
 
   scenarios <- config$scenarios
-  if (is.null(scenarios)) {
-    # Default scenarios
-    scenarios <- list(
-      since_2015 = list(start_vintage = "2015-08-01", label = "Since 2015"),
-      since_2022 = list(start_vintage = "2022-05-01", label = "Since 2022")
-    )
-  }
 
   for (scenario_name in names(scenarios)) {
     start_date <- as.Date(scenarios[[scenario_name]]$start_vintage)

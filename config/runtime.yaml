@@ -13,18 +13,6 @@ window_start_offset: 0
 # Maximum allowed lag between budget vintage and matched econ vintage
 max_econ_lag_days: 365
 
-# Optional network fetches.
-# If enabled, each fetch is required to succeed (fail-fast behavior).
-fetch:
-  cbo_github: false
-
-# Optional validation parser for Budget debt/GDP tables (slow, not used in core outputs)
-parse_budget_validation: false
-
-# CBO GitHub data URLs
-cbo_github_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/baselines.csv"
-cbo_gdp_url: "https://raw.githubusercontent.com/US-CBO/eval-projections/main/input_data/actual_GDP.csv"
-
 # CSV-primary inputs (relative to repo root)
 cbo_eval_dir: "input/eval_csv"
 cbo_eval_baselines_csv: "input/eval_csv/baselines.csv"

@@ -67,14 +67,7 @@ compute_household_costs <- function(fiscal, coefs) {
         annual_impact        = observed_annual - counterfactual_annual,
         observed_total       = observed_total,
         counterfactual_total = counterfactual_total,
-        lifetime_impact      = observed_total - counterfactual_total,
-        # Keep old names as aliases for downstream compatibility
-        baseline_rate        = observed_rate,
-        new_rate             = counterfactual_rate,
-        baseline_annual      = observed_annual,
-        new_annual           = counterfactual_annual,
-        baseline_total       = observed_total,
-        new_total            = counterfactual_total
+        lifetime_impact      = observed_total - counterfactual_total
       )
     }
 
