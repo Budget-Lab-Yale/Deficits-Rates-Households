@@ -1,6 +1,8 @@
 # generate_output.R — Tables, charts, and markdown summary
 #
-# Updated for legislative decomposition with two cumulative scenarios.
+# Publication output layer for the current two-scenario handoff build.
+# Some labels, filenames, and workbook columns are still intentionally tied
+# to the default since_2015 / since_2022 setup.
 
 library(ggplot2)
 library(dplyr)
@@ -444,7 +446,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
             nrow(panel)),
     data_source_line,
     "- **GDP denominator:** CBO GDP vintage table (+ latest Economic Projections Excel append)",
-    "- **Consumer rates:** FRED (MORTGAGE30US, TERMCBAUTO48NS, DPRIME)",
+    "- **Consumer loan assumptions:** hardcoded in config/coefficients.yaml with source notes",
     "",
     "## Sources",
     "",

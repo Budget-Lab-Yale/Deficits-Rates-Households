@@ -17,6 +17,7 @@ Range: 1.5–3.0 bp/pp.
 
 - **R** >= 4.1
 - **renv** (will be bootstrapped automatically on first run)
+- **Writable sibling archive directory** at `../Data` by default
 
 ## Quick Start
 
@@ -25,14 +26,38 @@ Range: 1.5–3.0 bp/pp.
 git clone <repo-url>
 cd Deficits-Rates-Households
 
-# 2. Restore R package dependencies
+# 2. Create the required parallel archive directory
+mkdir -p ../Data
+
+# 3. Restore R package dependencies
 Rscript -e 'renv::restore()'
 
-# 3. Download required CBO Excel files (see next section)
+# 4. Download required CBO Excel files (see next section)
 
-# 4. Run the pipeline
+# 5. Run the pipeline
 Rscript src/main.R
 ```
+
+`renv` activation is intentionally automatic. On a fresh machine, the first
+`Rscript` call can appear paused for 10-30 seconds while the project library is
+activated or bootstrapped. The repo now prints a startup message before that
+happens so it is clear the process is working.
+
+## Required Archive Directory
+
+This pipeline requires a writable archive root parallel to the repo. The
+default configuration expects this layout:
+
+```text
+parent/
+├── Data/
+└── Deficits-Rates-Households/
+```
+
+The default `config/runtime.yaml` value is `data_root: "../Data"`. Each run
+writes an archived vintage folder there in addition to regenerating `output/`.
+If your org wants the archive elsewhere, update `data_root` to another writable
+path before running the pipeline.
 
 ## Required CBO Data Files
 
@@ -76,7 +101,7 @@ error message naming the specific files needed.
 
 ### `config/runtime.yaml`
 
-Controls data source mode, projection horizon, fetch toggles, and file paths.
+Controls data source mode, projection horizon, archive location, and file paths.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -84,8 +109,7 @@ Controls data source mode, projection horizon, fetch toggles, and file paths.
 | `projection_horizon` | `10` | Fiscal-year window length |
 | `append_latest_excel` | `true` | Whether to append the latest CBO vintage from Excel |
 | `latest_excel_append_vintage` | `2026-02-01` | Date of the latest Excel vintage to append |
-| `fetch.cbo_github` | `false` | Fetch CBO eval-projections from GitHub (validation only) |
-| `data_root` | `../Data` | Archive directory (optional; pipeline completes without it) |
+| `data_root` | `../Data` | Required writable archive root, typically a sibling `Data/` directory |
 
 ### `config/coefficients.yaml`
 
@@ -107,9 +131,14 @@ All output is written to `output/` (gitignored, regenerated on each run):
 | `summary.md` | Narrative summary with key results |
 | `projection_vintage_panel.csv` | Full panel of harmonized vintage-level data |
 | `household_cost_impacts.csv` | Dollar-cost impacts by loan type |
-| `fiscal_decomposition_chart.png` | Cumulative legislative deficit impact chart |
-| `household_costs_chart.png` | Household cost impact visualization |
-| `household_costs_table.docx` | Formatted Word table of cost impacts |
+| `historical_contributions.csv` | Per-vintage and cumulative rate-effect history |
+| `legislative_delta.png` | Per-vintage legislative debt/GDP contribution chart |
+| `cumulative_legislative.png` | Cumulative legislative debt/GDP chart |
+| `cumulative_rate_effect.png` | Cumulative Treasury-rate effect chart |
+| `historical_contributions_since_2015.png` | Two-panel historical chart for the since-2015 scenario |
+| `historical_contributions_since_2022.png` | Two-panel historical chart for the since-2022 scenario |
+| `household_impacts.png` | Household cost impact visualization |
+| `interest_cost_impacts_table.docx` | Formatted Word table of cost impacts |
 
 ## Project Structure
 
@@ -129,7 +158,6 @@ Deficits-Rates-Households/
 ├── src/
 │   ├── main.R                  # Entry point
 │   ├── data/
-│   │   ├── fetch_cbo_github.R  # Optional CBO GitHub fetch
 │   │   ├── parse_cbo_eval_csv.R  # CSV-primary data ingestion
 │   │   ├── parse_cbo_excel.R   # Legacy Excel parser
 │   │   └── build_dataset.R     # Panel construction
@@ -150,13 +178,12 @@ Deficits-Rates-Households/
 
 ## Pipeline Steps
 
-1. **Fetch CBO GitHub** (optional) — validation data from CBO eval-projections repo
-2. **Parse CBO Data** — build fiscal-policy decomposition from CSV + Excel append
-3. **Build Panel** — harmonize vintages to consistent 10-year windows, compute debt/GDP
-4. **Compute Fiscal Contribution** — apply elasticity to cumulative legislative debt changes
-5. **Compute Household Costs** — translate rate effects through pass-through coefficients to loan costs
-6. **Generate Output** — charts, tables, and markdown summary
-7. **Archive** — copy key outputs to vintage directory (skipped if `data_root` is unavailable)
+1. **Parse CBO Data** — build fiscal-policy decomposition from CSV + Excel append
+2. **Build Panel** — harmonize vintages to consistent 10-year windows, compute debt/GDP
+3. **Compute Fiscal Contribution** — apply elasticity to cumulative legislative debt changes
+4. **Compute Household Costs** — translate rate effects through pass-through coefficients to loan costs
+5. **Generate Output** — charts, tables, and markdown summary
+6. **Archive** — copy key outputs and manifests to the required vintage directory under `data_root`
 
 ## Update Cadence
 
@@ -165,12 +192,24 @@ When a new CBO vintage is released:
 
 1. Download the new Budget and Economic Projections Excel files
 2. Update `latest_excel_append_vintage` in `config/runtime.yaml`
-3. Add a `DECOMP_LOOKUP` entry in `src/data/parse_cbo_eval_csv.R` for the new vintage
+3. Add a `DECOMP_LOOKUP` entry in `src/data/parse_cbo_excel.R` for the new vintage
 4. Run the pipeline
 
 Once the CBO eval-projections CSV repository is updated to include the new
 vintage, the Excel append is no longer needed and the CSV data becomes the
 primary source.
+
+## Current Scope
+
+This handoff build is not fully generic yet. The core data pipeline is fairly
+config-driven, but the publication-oriented output layer still assumes:
+
+- Two named cumulative scenarios: `since_2015` and `since_2022`
+- A manual `DECOMP_LOOKUP` table for vintage-specific Excel parsing
+- Three loan products with fixed passthrough mappings in `config/coefficients.yaml`
+- The latest-vintage Excel append is wired through `latest_excel_append_vintage`
+
+For current testing, keep those defaults in place.
 
 ## References
 

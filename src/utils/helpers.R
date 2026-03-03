@@ -12,7 +12,7 @@ read_config <- function(path = NULL) {
   if (is.null(path)) {
     path <- file.path(find_repo_root(), "config", "runtime.yaml")
   }
-  apply_config_defaults(yaml::read_yaml(path))
+  validate_config(apply_config_defaults(yaml::read_yaml(path)))
 }
 
 read_coefficients <- function(path = NULL) {
@@ -54,10 +54,29 @@ apply_config_defaults <- function(config) {
   config
 }
 
+validate_config <- function(config) {
+  config$output_dir <- config$output_dir %||% "output"
+
+  root <- config$data_root
+  if (is.null(root) || !is.character(root) || length(root) != 1 || !nzchar(root)) {
+    stop(paste0(
+      "config$data_root is required.\n",
+      "  This pipeline expects a writable archive root parallel to the repo.\n",
+      "  Default setup: create ../Data next to Deficits-Rates-Households and keep\n",
+      "  data_root: \"../Data\" in config/runtime.yaml."
+    ))
+  }
+
+  config
+}
+
 # ---- Data Path Management (Budget Lab convention) ----
 
 get_data_path <- function(config, interface = NULL, version = NULL, vintage = NULL) {
   root <- config$data_root
+  if (is.null(root) || !is.character(root) || length(root) != 1 || !nzchar(root)) {
+    stop("config$data_root must be a single non-empty path")
+  }
   if (!startsWith(root, "/")) {
     root <- file.path(find_repo_root(), root)
   }
@@ -72,8 +91,11 @@ create_vintage_dir <- function(config, ...) {
   path <- get_data_path(config, ...)
   dir.create(path, recursive = TRUE, showWarnings = FALSE)
   if (!dir.exists(path)) {
-    warning(sprintf("Could not create data archive directory: %s — archiving will be skipped.", path))
-    return(NULL)
+    stop(paste0(
+      "Could not create required data archive directory: ", path, "\n",
+      "  Create a writable sibling Data directory (default: ../Data) or update\n",
+      "  config$data_root to a writable archive root."
+    ))
   }
   path
 }

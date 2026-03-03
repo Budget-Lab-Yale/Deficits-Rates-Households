@@ -31,14 +31,17 @@ latest_excel_append_vintage: "2026-02-01"
 cbo_budget_dir: "input/budget_projections"
 cbo_econ_dir: "input/economic_projections"
 
-# Data storage root (relative to repo root)
+# Required archive root (relative to repo root).
+# Default setup: create a sibling ../Data directory next to the repo.
 data_root: "../Data"
 
 # Interface name for Budget Lab data convention
 interface: "Deficits-Rates-Households"
 version: "v1"
 
-# Cumulative legislative impact scenarios
+# Cumulative legislative impact scenarios.
+# The core pipeline reads this list, but the publication workbook and some
+# chart labels still assume the default since_2015 and since_2022 keys.
 scenarios:
   since_2015:
     start_vintage: "2015-08-01"

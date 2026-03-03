@@ -56,11 +56,7 @@ data_dir <- create_vintage_dir(config, vintage = vintage)
 output_dir <- file.path(.repo_root, config$output_dir)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-if (!is.null(data_dir)) {
-  message(sprintf("Data archive:           %s\n", data_dir))
-} else {
-  message("Data archive:           (disabled — data_root not writable)\n")
-}
+message(sprintf("Data archive:           %s\n", data_dir))
 
 # ---- Step 1: Parse CBO Data (CSV-primary or legacy Excel) ----
 
@@ -72,7 +68,7 @@ if (identical(config$cbo_data_source, "eval_csv_primary")) {
   cbo_excel <- parse_cbo_excel_files(config)
 }
 
-if (!is.null(data_dir)) save_cbo_excel(cbo_excel, data_dir)
+save_cbo_excel(cbo_excel, data_dir)
 message("")
 
 # ---- Step 2: Build Legislative Decomposition Panel ----
@@ -80,7 +76,7 @@ message("")
 message("--- Step 2: Building fiscal-policy decomposition panel ---")
 
 panel <- build_dataset(cbo_excel, config)
-if (!is.null(data_dir)) save_dataset(panel, data_dir)
+save_dataset(panel, data_dir)
 message("")
 
 # ---- Step 3: Compute Fiscal Contribution (Two Scenarios) ----
@@ -113,25 +109,21 @@ message("")
 
 message("--- Step 6: Archiving ---")
 
-if (!is.null(data_dir)) {
-  # Copy key outputs to the data vintage folder
-  archive_files <- c("household_cost_impacts.csv", "projection_vintage_panel.csv",
-                     "summary.md")
-  for (f in archive_files) {
-    src <- file.path(output_dir, f)
-    if (file.exists(src)) {
-      file.copy(src, file.path(data_dir, f), overwrite = TRUE)
-    }
+# Copy key outputs to the data vintage folder
+archive_files <- c("household_cost_impacts.csv", "projection_vintage_panel.csv",
+                   "summary.md")
+for (f in archive_files) {
+  src <- file.path(output_dir, f)
+  if (file.exists(src)) {
+    file.copy(src, file.path(data_dir, f), overwrite = TRUE)
   }
-  write_manifest(data_dir, config, list(
-    decomp = nrow(cbo_excel$decomp_vintages),
-    econ = length(unique(cbo_excel$econ_vintages$vintage_date)),
-    panel = nrow(panel)
-  ))
-  message(sprintf("  Archived to %s", data_dir))
-} else {
-  message("  Skipped archiving (data_root not writable).")
 }
+write_manifest(data_dir, config, list(
+  decomp = nrow(cbo_excel$decomp_vintages),
+  econ = length(unique(cbo_excel$econ_vintages$vintage_date)),
+  panel = nrow(panel)
+))
+message(sprintf("  Archived to %s", data_dir))
 
 message(sprintf("\nPipeline complete.\n  Output: %s\n", output_dir))
 
