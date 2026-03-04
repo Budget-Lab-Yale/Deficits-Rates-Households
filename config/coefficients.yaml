@@ -37,8 +37,8 @@ loans:
     baseline_rate_pct: 7.51
     source: "Experian Q3 2025, FRED TERMCBAUTO48NS Q3 2025"
   small_business:
-    label: "Small Business Loan (5 year)"
-    principal: 663000     # B2BReview/SBA 2024 (no 2025 update available)
-    term_months: 60
-    baseline_rate_pct: 7.00
-    source: "B2BReview/SBA, FRED DPRIME Nov 2025"
+    label: "Small Business Loan (10 year)"
+    principal: 476800     # Rounded from FY2025 SBA 7(a) implied average ($37.0B / 77,600 = $476,804)
+    term_months: 120
+    baseline_rate_pct: 10.00
+    source: "SBA FY2025 7(a) lending release, FRED DPRIME Nov 2025 + 3.00 pp spread assumption"

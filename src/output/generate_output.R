@@ -514,7 +514,7 @@ build_interest_cost_table_rows <- function(fiscal, costs) {
       "Cumulative lifetime cost effect",
       "",
       costs$small_business$label,
-      "Average loan balance (2024)",
+      "Average SBA 7(a) loan size (FY2025)",
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
       "Cumulative lifetime cost effect",
@@ -595,7 +595,7 @@ style_tbl_footer <- function(ft) {
   ft
 }
 
-tbl_attribution <- "Table: The Budget Lab | Source: NAR, Experian, B2BReview/SBA, Freddie Mac, FRED, The Budget Lab analysis"
+tbl_attribution <- "Table: The Budget Lab | Source: NAR, Experian, SBA FY2025 lending release, Freddie Mac, FRED, The Budget Lab analysis"
 
 
 build_costs_flextable <- function(rows) {
