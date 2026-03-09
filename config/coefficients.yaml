@@ -38,7 +38,7 @@ loans:
     source: "Experian 2025 Q3 new car loan data"
   small_business:
     label: "Small Business Loan (10 year)"
-    principal: 476800     # Rounded from FY2025 SBA 7(a) implied average ($37.0B / 77,600 = $476,804)
+    principal: 477571     # SBA FY2025 7(a) average loan size
     term_months: 120
     baseline_rate_pct: 10.25
-    source: "SBA FY2025 7(a) lending release, FRED DPRIME Sep 30 2025 + 3.00 pp spread assumption"
+    source: "SBA FY2025 7(a) average loan size, FRED DPRIME Sep 30 2025 + 3.00 pp spread assumption"
