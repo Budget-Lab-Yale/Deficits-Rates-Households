@@ -21,24 +21,24 @@ passthrough:
   auto: 0.50
   small_business: 0.25
 
-# Loan parameters (late November 2025 vintage, matching CBO data cutoff).
+# Loan parameters based on late-Q3 2025 market data and SBA FY2025 program totals.
 # Source strings below are the live reference trail for these assumptions.
 loans:
   mortgage:
     label: "Home Mortgage (30 year)"
-    principal: 329840     # FRED HOSMEDUSM052N Sep 2025 median $412,300 less 20% down
+    principal: 341440     # NAR median home sale price Q3 2025 ($426,800) less 20% down
     term_months: 360
-    baseline_rate_pct: 6.23
-    source: "FRED HOSMEDUSM052N Sep 2025, Freddie Mac PMMS Nov 26 2025"
+    baseline_rate_pct: 6.30
+    source: "NAR median home sale price Q3 2025, Freddie Mac PMMS survey week of Sep 25 2025"
   auto:
-    label: "Auto Loan (5½ year)"
+    label: "Auto Loan (5¾ year)"
     principal: 42332      # Experian State of Auto Finance Q3 2025
-    term_months: 67
-    baseline_rate_pct: 7.51
-    source: "Experian Q3 2025, FRED TERMCBAUTO48NS Q3 2025"
+    term_months: 69
+    baseline_rate_pct: 6.56
+    source: "Experian 2025 Q3 new car loan data"
   small_business:
     label: "Small Business Loan (10 year)"
     principal: 476800     # Rounded from FY2025 SBA 7(a) implied average ($37.0B / 77,600 = $476,804)
     term_months: 120
-    baseline_rate_pct: 10.00
-    source: "SBA FY2025 7(a) lending release, FRED DPRIME Nov 2025 + 3.00 pp spread assumption"
+    baseline_rate_pct: 10.25
+    source: "SBA FY2025 7(a) lending release, FRED DPRIME Sep 30 2025 + 3.00 pp spread assumption"

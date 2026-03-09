@@ -686,7 +686,7 @@ build_costs_flextable <- function(rows) {
     "multiplied by 2 basis points per percentage point (Neveu & Schafer 2024), ",
     "scaled by product-specific pass-through coefficients. ",
     "Mortgage pass-through: 100%. Auto: 50%. Small business: 25%. ",
-    "All loan parameters as of late November 2025."
+    "Loan parameters based on late-Q3 2025 market data and the SBA FY2025 annual report."
   )
   ft <- flextable::add_footer_lines(ft, values = note)
   ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
