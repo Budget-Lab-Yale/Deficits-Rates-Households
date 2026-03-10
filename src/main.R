@@ -91,10 +91,22 @@ message("")
 
 message("--- Step 4: Computing household cost impacts ---")
 
-# Use the "since_2015" scenario as the primary for household costs
-primary_scenario <- fiscal[["since_2015"]] %||% fiscal[[1]]
-costs <- compute_household_costs(primary_scenario, coefs)
-costs_table <- household_costs_table(costs)
+# Compute household costs for all fiscal scenarios
+all_costs <- list()
+all_costs_tables <- list()
+for (scenario_name in names(fiscal)) {
+  message(sprintf("  [%s]", fiscal[[scenario_name]]$scenario_label))
+  sc_costs <- compute_household_costs(fiscal[[scenario_name]], coefs)
+  sc_table <- household_costs_table(sc_costs)
+  sc_table$fiscal_scenario <- scenario_name
+  all_costs[[scenario_name]] <- sc_costs
+  all_costs_tables[[scenario_name]] <- sc_table
+}
+costs_table <- do.call(rbind, all_costs_tables)
+rownames(costs_table) <- NULL
+
+# Primary scenario objects (for outputs that only need one scenario)
+costs <- all_costs[["since_2015"]] %||% all_costs[[1]]
 message("")
 
 # ---- Step 5: Generate Output ----

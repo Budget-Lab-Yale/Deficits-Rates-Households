@@ -270,9 +270,14 @@ plot_historical_contributions <- function(historical, config, output_dir) {
 
 
 plot_household_impacts <- function(costs_table, config, output_dir) {
-  # Bar chart of annual cost impacts (preferred scenario only)
+  # Bar chart of annual cost impacts (preferred scenario, since_2015 only)
   # with lifetime cost annotation above each bar
-  pref <- costs_table[costs_table$scenario == "preferred", ]
+  primary <- if ("fiscal_scenario" %in% names(costs_table)) {
+    costs_table[costs_table$fiscal_scenario == "since_2015", ]
+  } else {
+    costs_table
+  }
+  pref <- primary[primary$scenario == "preferred", ]
   pref$loan_type <- factor(pref$loan_type,
                            levels = pref$loan_type[order(-abs(pref$annual_impact))])
 
@@ -371,7 +376,7 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
     lines <- c(lines, "")
   }
 
-  # Household costs (primary scenario)
+  # Household costs (primary fiscal scenario)
   lines <- c(lines,
     "## Household Cost Impacts (Preferred Estimate: 2 bp/pp)",
     "",
@@ -379,7 +384,12 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
     "|-----------|-----------|-------------|--------------|----------------|"
   )
 
-  pref <- costs_table[costs_table$scenario == "preferred", ]
+  primary_ct <- if ("fiscal_scenario" %in% names(costs_table)) {
+    costs_table[costs_table$fiscal_scenario == "since_2015", ]
+  } else {
+    costs_table
+  }
+  pref <- primary_ct[primary_ct$scenario == "preferred", ]
   for (i in seq_len(nrow(pref))) {
     r <- pref[i, ]
     lines <- c(lines, sprintf("| %s | $%s | %+.2f pp | $%s/yr | $%s |",
@@ -405,8 +415,8 @@ generate_markdown_summary <- function(fiscal, costs, costs_table, panel, config,
     el <- primary$elasticity[[scenario]]
     re <- primary$rate_effect[[scenario]]
     mortgage_label <- if (!is.null(costs$mortgage)) costs$mortgage$label else costs[[1]]$label
-    mortgage <- costs_table[costs_table$scenario == scenario &
-                            costs_table$loan_type == mortgage_label, ]
+    mortgage <- primary_ct[primary_ct$scenario == scenario &
+                            primary_ct$loan_type == mortgage_label, ]
     ma <- if (nrow(mortgage) > 0) mortgage$annual_impact[1] else NA
     src <- switch(scenario,
       low = "Furceri et al. (2025)",
@@ -684,7 +694,7 @@ build_costs_flextable <- function(rows) {
   note <- paste0(
     "Rate effects computed as cumulative legislative change in projected debt-to-GDP ",
     "multiplied by 2 basis points per percentage point (Neveu & Schafer 2024), ",
-    "scaled by product-specific pass-through coefficients. ",
+    "scaled by product-specific pass-through coefficients based on the USMM model. ",
     "Mortgage pass-through: 100%. Auto: 50%. Small business: 25%. ",
     "Loan parameters based on late-Q3 2025 market data and the SBA FY2025 annual report."
   )
@@ -700,14 +710,21 @@ build_sensitivity_flextable <- function(fiscal, costs, costs_table) {
   primary <- fiscal[["since_2015"]] %||% fiscal[[1]]
   mortgage_label <- if (!is.null(costs$mortgage)) costs$mortgage$label else costs[[1]]$label
 
+  # Filter to since_2015 if multi-scenario
+  primary_ct <- if ("fiscal_scenario" %in% names(costs_table)) {
+    costs_table[costs_table$fiscal_scenario == "since_2015", ]
+  } else {
+    costs_table
+  }
+
   fmt_d <- function(x) paste0("$", formatC(round(x), format = "f", digits = 0, big.mark = ","))
 
   sens_rows <- list()
   for (scenario in c("low", "preferred", "high")) {
     el <- primary$elasticity[[scenario]]
     re <- primary$rate_effect[[scenario]]
-    mortgage <- costs_table[costs_table$scenario == scenario &
-                            costs_table$loan_type == mortgage_label, ]
+    mortgage <- primary_ct[primary_ct$scenario == scenario &
+                            primary_ct$loan_type == mortgage_label, ]
     ma <- if (nrow(mortgage) > 0) round(mortgage$annual_impact[1], 0) else NA
     ml <- if (nrow(mortgage) > 0) round(mortgage$lifetime_impact[1], 0) else NA
     src <- switch(scenario,
@@ -775,9 +792,9 @@ build_sensitivity_flextable <- function(fiscal, costs, costs_table) {
   ft <- flextable::add_footer_lines(ft,
     values = paste0(
       "Based on cumulative legislative debt impacts since 2015. Preferred estimate bolded. ",
-      "1.5 bp/pp from Furceri, Goncalves & Li (2025, IMF WP 25/142, Table 2 fully-controlled); ",
+      "1.5 bp/pp rounded from Furceri, Goncalves & Li (2025, IMF WP 25/142, Table 2 fully-controlled); ",
       "2 bp/pp from Neveu & Schafer (2024, CBO WP 2024-05); ",
-      "3 bp/pp from Plante, Richter & Zubairy (2025, Dallas Fed WP 2513)."))
+      "3 bp/pp from Plante, Richter & Zubairy (2025, Dallas Fed WP 2513) table 5."))
   ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
   ft <- style_tbl_footer(ft)
 
