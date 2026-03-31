@@ -199,18 +199,6 @@ Once the CBO eval-projections CSV repository is updated to include the new
 vintage, the Excel append is no longer needed and the CSV data becomes the
 primary source.
 
-## Current Scope
-
-This handoff build is not fully generic yet. The core data pipeline is fairly
-config-driven, but the publication-oriented output layer still assumes:
-
-- Two named cumulative scenarios: `since_2015` and `since_2022`
-- A manual `DECOMP_LOOKUP` table for vintage-specific Excel parsing
-- Three loan products with fixed passthrough mappings in `config/coefficients.yaml`
-- The latest-vintage Excel append is wired through `latest_excel_append_vintage`
-
-For current testing, keep those defaults in place.
-
 ## References
 
 - Neveu, A. R. & Schafer, J. (2024). "The Effect of Federal Debt on Long-Term Interest Rates." CBO Working Paper 2024-05.
