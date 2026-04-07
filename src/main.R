@@ -27,6 +27,7 @@
 source(file.path(.repo_root, "src", "utils", "helpers.R"))
 source(file.path(.repo_root, "src", "data", "parse_cbo_excel.R"))
 source(file.path(.repo_root, "src", "data", "parse_cbo_eval_csv.R"))
+source(file.path(.repo_root, "src", "data", "parse_cbo_forward_paths.R"))
 source(file.path(.repo_root, "src", "data", "build_dataset.R"))
 source(file.path(.repo_root, "src", "model", "fiscal_contribution.R"))
 source(file.path(.repo_root, "src", "model", "amortize.R"))
@@ -69,6 +70,14 @@ if (identical(config$cbo_data_source, "eval_csv_primary")) {
 }
 
 save_cbo_excel(cbo_excel, data_dir)
+message("")
+
+# ---- Step 1b: Parse CBO Forward Debt/Rate/GDP Paths ----
+
+message("--- Step 1b: Parsing CBO forward paths (debt, rates, GDP) ---")
+
+forward <- parse_cbo_forward_paths(config)
+save_cbo_forward_paths(forward, data_dir)
 message("")
 
 # ---- Step 2: Build Legislative Decomposition Panel ----
