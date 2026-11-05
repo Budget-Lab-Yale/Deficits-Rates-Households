@@ -14,8 +14,17 @@ compute_household_costs <- function(fiscal, coefs) {
 
   results <- list()
 
+  required_fields <- c("label", "period", "principal", "term_months",
+                       "baseline_rate_pct", "source")
+
   for (loan_name in names(loans)) {
     loan <- loans[[loan_name]]
+
+    missing_fields <- setdiff(required_fields, names(loan))
+    if (length(missing_fields) > 0) {
+      stop(sprintf("config/coefficients.yaml loans$%s is missing: %s",
+                   loan_name, paste(missing_fields, collapse = ", ")))
+    }
 
     # Get the pass-through name (matching convention)
     pt_name <- switch(loan_name,
@@ -73,6 +82,7 @@ compute_household_costs <- function(fiscal, coefs) {
 
     results[[loan_name]] <- list(
       label       = loan$label,
+      period      = loan$period,
       principal   = loan$principal,
       term_months = loan$term_months,
       source      = loan$source,
