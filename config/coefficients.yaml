@@ -21,24 +21,29 @@ passthrough:
   auto: 0.50
   small_business: 0.25
 
-# Loan parameters based on late-Q3 2025 market data and SBA FY2025 program totals.
+# Loan parameters: mortgage from NAR Q3 2026 and PMMS late September 2026,
+# auto from Experian Q2 2026, small business from SBA FY2026 7(a) totals and
+# prime on Sep 30 2026. `period` is the data period printed in output labels.
 # Source strings below are the live reference trail for these assumptions.
 loans:
   mortgage:
     label: "Home Mortgage (30 year)"
-    principal: 341440     # NAR median home sale price Q3 2025 ($426,800) less 20% down
+    period: "Q3 2026"
+    principal: 346320     # NAR median single-family home sale price Q3 2026 ($432,900) less 20% down
     term_months: 360
-    baseline_rate_pct: 6.30
-    source: "NAR median home sale price Q3 2025, Freddie Mac PMMS survey week of Sep 25 2025"
+    baseline_rate_pct: 7.03
+    source: "NAR median home sale price Q3 2026, Freddie Mac PMMS survey week of Sep 24 2026"
   auto:
     label: "Auto Loan (5¾ year)"
-    principal: 42332      # Experian State of Auto Finance Q3 2025
+    period: "Q2 2026"
+    principal: 43610      # Experian State of Auto Finance Q2 2026 (term 69.46 months)
     term_months: 69
-    baseline_rate_pct: 6.56
-    source: "Experian 2025 Q3 new car loan data"
+    baseline_rate_pct: 6.35
+    source: "Experian 2026 Q2 new car loan data"
   small_business:
     label: "Small Business Loan (10 year)"
-    principal: 477571     # SBA FY2025 7(a) average loan size
+    period: "FY2026"
+    principal: 577703     # SBA FY2026 7(a) average loan size ($32,426,480,618 / 56,130 loans)
     term_months: 120
-    baseline_rate_pct: 10.25
-    source: "SBA FY2025 7(a) average loan size, FRED DPRIME Sep 30 2025 + 3.00 pp spread assumption"
+    baseline_rate_pct: 10.00
+    source: "SBA FY2026 7(a) average loan size (SBA Monthly/Yearly 7(a) and 504 Activity workbook, as of 09/30/2026), FRED DPRIME Sep 30 2026 + 3.00 pp spread assumption"
