@@ -92,7 +92,11 @@ EPISODES <- list(
   `1997-09-01` = "BBA-97 (signed Aug 1997)"
 )
 
-FRED_KEY <- "13eeee2f309460c13a0f1f8514b26106"
+# FRED API key from the environment (free at https://fredaccount.stlouisfed.org/apikeys).
+FRED_KEY <- Sys.getenv("FRED_API_KEY")
+if (!nzchar(FRED_KEY)) {
+  stop("Set the FRED_API_KEY environment variable to a FRED API key before running this script.")
+}
 
 # ---- Inputs ----
 
