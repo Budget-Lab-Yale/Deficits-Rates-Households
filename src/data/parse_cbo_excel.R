@@ -6,7 +6,7 @@
 # Budget Projections (51118-*): Extracts legislative deficit decomposition
 #   from Table A-1 / equivalent sheets using hardcoded lookup.
 #
-# Budget debt/GDP validation parsing has been moved to deprecated/validate_budget_debt_gdp.R.
+# Budget debt/GDP validation parsing is not part of this pipeline.
 
 library(readxl)
 library(dplyr)
@@ -17,7 +17,7 @@ library(dplyr)
 
 parse_cbo_excel_files <- function(config) {
   # Parse Economic and Legislative Decomposition data. Returns a list with:
-  #   $budget_vintages: empty (budget validation moved to deprecated/)
+  #   $budget_vintages: empty (budget validation is not part of this pipeline)
   #   $econ_vintages:   nominal GDP by (vintage_date, year)
   #   $decomp_vintages: legislative deficit decomposition by vintage
 

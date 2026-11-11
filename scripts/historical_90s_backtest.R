@@ -16,8 +16,8 @@
 #     read.
 #
 # GDP denominator: CBO contemporaneous projections from
-#   input/eval_csv/cbo_gdp_projections_1990s.csv (extracted from PDFs in
-#   ../../references/cbo_archive/), with realized FRED GDP as fallback for
+#   input/eval_csv/cbo_gdp_projections_1990s.csv (transcribed from the CBO
+#   publications named in its source_note column), with realized FRED GDP as fallback for
 #   the March/April/July "President's Budgetary Proposals" vintages where
 #   CBO did not publish economic projections. For horizons past a vintage's
 #   published window, the value is extrapolated at the trailing two-year
@@ -404,8 +404,8 @@ write_summary_md <- function(panel, episode_rows, path) {
   L <- c(L, "## Files", "")
   L <- c(L, "- `per_vintage_harmonized.csv` — every vintage with both horizons")
   L <- c(L, "- `episode_summary.csv` — three-episode condensed table")
-  L <- c(L, "- archive of contemporaneous CBO PDFs: `../../../references/cbo_archive/`")
-  L <- c(L, "- input: `../input/eval_csv/cbo_gdp_projections_1990s.csv`")
+  L <- c(L, "- sources: the contemporaneous CBO publications named in the input's `source_note` column")
+  L <- c(L, "- input: `../../input/eval_csv/cbo_gdp_projections_1990s.csv`")
   L <- c(L, "")
 
   writeLines(L, path)
