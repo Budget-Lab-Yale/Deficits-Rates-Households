@@ -517,20 +517,20 @@ build_interest_cost_table_rows <- function(fiscal, costs) {
   rows <- data.frame(
     label = c(
       costs$mortgage$label,
-      "Median sale price (Q3 2025)",
+      sprintf("Median sale price (%s)", costs$mortgage$period),
       "Less 20% down",
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
       "Cumulative lifetime cost effect",
       "",
       costs$small_business$label,
-      "Average SBA 7(a) loan size (FY2025)",
+      sprintf("Average SBA 7(a) loan size (%s)", costs$small_business$period),
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
       "Cumulative lifetime cost effect",
       "",
       costs$auto$label,
-      "Average new auto loan principal (Q3 2025)",
+      sprintf("Average new auto loan principal (%s)", costs$auto$period),
       "Fiscal-policy rate effect (percentage point)",
       "Annual interest cost effect",
       "Cumulative lifetime cost effect",
@@ -581,7 +581,7 @@ write_interest_cost_impacts_workbook <- function(fiscal, costs, costs_table, out
     stop("Package 'flextable' is required to write interest_cost_impacts_table.docx")
   }
 
-  ft_costs <- build_costs_flextable(rows)
+  ft_costs <- build_costs_flextable(rows, costs)
   ft_sensitivity <- build_sensitivity_flextable(fiscal, costs, costs_table)
 
   # Write both tables to a single docx
@@ -605,10 +605,13 @@ style_tbl_footer <- function(ft) {
   ft
 }
 
-tbl_attribution <- "Table: The Budget Lab | Source: NAR, Experian, SBA FY2025 lending release, Freddie Mac, FRED, The Budget Lab analysis"
+tbl_attribution <- function(costs) {
+  sprintf("Table: The Budget Lab | Source: NAR, Experian, SBA %s lending data, Freddie Mac, FRED, The Budget Lab analysis",
+          costs$small_business$period)
+}
 
 
-build_costs_flextable <- function(rows) {
+build_costs_flextable <- function(rows, costs) {
   # Build display data.frame (drop blank/spacer rows)
   display <- rows[rows$row_type != "blank", ]
 
@@ -696,10 +699,11 @@ build_costs_flextable <- function(rows) {
     "multiplied by 2 basis points per percentage point (Neveu & Schafer 2024), ",
     "scaled by product-specific pass-through coefficients based on the USMM model. ",
     "Mortgage pass-through: 100%. Auto: 50%. Small business: 25%. ",
-    "Loan parameters based on late-Q3 2025 market data and the SBA FY2025 annual report."
+    sprintf("Loan parameters based on %s mortgage and %s auto loan market data and SBA %s 7(a) program totals.",
+            costs$mortgage$period, costs$auto$period, costs$small_business$period)
   )
   ft <- flextable::add_footer_lines(ft, values = note)
-  ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
+  ft <- flextable::add_footer_lines(ft, values = tbl_attribution(costs))
   ft <- style_tbl_footer(ft)
 
   ft
@@ -795,7 +799,7 @@ build_sensitivity_flextable <- function(fiscal, costs, costs_table) {
       "1.5 bp/pp rounded from Furceri, Goncalves & Li (2025, IMF WP 25/142, Table 2 fully-controlled); ",
       "2 bp/pp from Neveu & Schafer (2024, CBO WP 2024-05); ",
       "3 bp/pp from Plante, Richter & Zubairy (2025, Dallas Fed WP 2513) table 5."))
-  ft <- flextable::add_footer_lines(ft, values = tbl_attribution)
+  ft <- flextable::add_footer_lines(ft, values = tbl_attribution(costs))
   ft <- style_tbl_footer(ft)
 
   ft
