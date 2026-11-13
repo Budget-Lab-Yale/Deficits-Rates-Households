@@ -20,9 +20,14 @@ compute_household_costs <- function(fiscal, coefs) {
   for (loan_name in names(loans)) {
     loan <- loans[[loan_name]]
 
-    missing_fields <- setdiff(required_fields, names(loan))
+    # A field fails if absent, null (`~`), NA, not a single value, or blank text
+    missing_fields <- required_fields[vapply(required_fields, function(f) {
+      v <- loan[[f]]
+      is.null(v) || length(v) != 1 || is.na(v) ||
+        (is.character(v) && !nzchar(trimws(v)))
+    }, logical(1))]
     if (length(missing_fields) > 0) {
-      stop(sprintf("config/coefficients.yaml loans$%s is missing: %s",
+      stop(sprintf("config/coefficients.yaml loans$%s is missing or empty: %s",
                    loan_name, paste(missing_fields, collapse = ", ")))
     }
 
